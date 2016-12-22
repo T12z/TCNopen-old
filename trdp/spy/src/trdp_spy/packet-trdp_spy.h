@@ -201,6 +201,6 @@ guint32 dissect_trdp_generic_body(tvbuff_t *tvb, packet_info *pinfo, proto_tree 
  *
  * @return nothing
  */
-void dissect_trdp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree);
+int dissect_trdp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *);
 
 /** @} */
