@@ -5,7 +5,7 @@
 # export WIRESHARK_SRC=$HOME/src/wireshark-1.8.3
 # $Id: $
 
-INCS_GLIB=`pkg-config --cflags glib-2.0`
+INCS_GLIB=`pkg-config --cflags glib-2.0 wireshark`
 
 INCS = -I $(WIRESHARK_SRC) $(INCS_GLIB) -I/usr/include/libxml2 
 # Debugging:
