@@ -33,12 +33,16 @@
 # include "config.h"
 #endif
 
+#if VERSION_MAJOR < 2
+#error Old 1x API not supported
+#endif
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <ctype.h>
 #include <string.h>
 #include <epan/packet.h>
-#include <epan/emem.h>
+#include <epan/wmem/wmem.h>
 #include <epan/expert.h>
 #include <epan/proto.h>
 #include <epan/prefs.h>
@@ -103,14 +107,28 @@ static int hf_trdp_spy_sourceURI = -1;          /*string*/
 static int hf_trdp_spy_destinationURI = -1;     /*string*/
 static int hf_trdp_spy_isMD 	= -1;           /*flag*/
 
+/* extra fields from former _add_text */
+static int hf_trdp_spy_padding = -1;            /*flag*/
+static int hf_trdp_spy_elements = -1;
+
+/* expert info */
+static expert_field ei_trdp_spy_expert = EI_INIT;
+
 static gboolean preference_changed = FALSE;
 
 //possible PD - Substution transmission
+/*
 static const value_string trdp_spy_subs_code_vals[] =
 {
     {0, "No"},
     {1, "Yes"},
     {0, NULL},
+};
+*/
+
+static const true_false_string tfs_padding_bit = {
+    "zero-padding",
+    "padding not zero"
 };
 
 /* Global sample preference ("controls" display of numbers) */
@@ -188,11 +206,11 @@ static proto_item* add_crc2tree(tvbuff_t *tvb, proto_tree *trdp_spy_tree, int re
 static gint32 checkPaddingAndOffset(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, guint32 start_offset, guint32 offset)
 {
     gint32 remainingBytes;
-    gint32 isPaddingZero;
+    gint32 isNonZeroPadding;
     gint32 i;
 
     /* Jump to the last 4 byte and check the crc */
-    remainingBytes = tvb_length_remaining(tvb, offset);
+    remainingBytes = tvb_captured_length_remaining(tvb, offset);
     PRNT(printf("The remaining bytes are %d (startoffset=%d, padding=%d)\n", remainingBytes, start_offset, (remainingBytes % 4)));
 
     if (remainingBytes < 0) /* There is no space for user data */
@@ -201,22 +219,22 @@ static gint32 checkPaddingAndOffset(tvbuff_t *tvb, packet_info *pinfo, proto_tre
     }
     else if (remainingBytes > 0)
     {
-        isPaddingZero = 0; // flag, if all padding bytes are zero
+        isNonZeroPadding = 0; // flag, if a padding byte are is non-zero
         for(i = 0; i < remainingBytes; i++)
         {
             if (tvb_get_guint8(tvb, offset + i) != 0)
             {
-                isPaddingZero = 1;
+                isNonZeroPadding = 1;
                 break;
             }
         }
-        proto_tree_add_text(tree, tvb, offset, remainingBytes, ( (isPaddingZero == 0) ? "padding" : "padding not zero") );
+        proto_tree_add_boolean(tree, hf_trdp_spy_padding, tvb, offset, remainingBytes, isNonZeroPadding);
         offset += remainingBytes;
 
         /* Mark this packet in the statistics also as "not perfect" */
-        if (isPaddingZero != 0)
+        if (isNonZeroPadding)
         {
-            expert_add_info_format(pinfo, NULL, PI_UNDECODED, PI_WARN, "Padding not zero");
+            expert_add_info_format(pinfo, NULL, &ei_trdp_spy_expert, /*PI_UNDECODED, PI_WARN*/"Padding not zero");
         }
     }
 
@@ -268,9 +286,9 @@ guint32 dissect_trdp_generic_body(tvbuff_t *tvb, packet_info *pinfo, proto_tree 
 	guint16 value16u = 0;
 	guint32 value32u = 0;
 	guint64 value64u = 0;
-	gfloat real32 = 0;
+//	gfloat real32 = 0;
 	gdouble real64 = 0;
-	gchar  *text = NULL;
+	guint8 *text = NULL;
 	GTimeVal time;
 
 	start_offset = offset; /* mark the beginning of the userdata in the package */
@@ -291,13 +309,13 @@ guint32 dissect_trdp_generic_body(tvbuff_t *tvb, packet_info *pinfo, proto_tree 
 	if ( preference_changed || !trdp_parsebody_isinited())
     {
 		PRNT(printf("TRDP dictionary is '%s' (changed=%d, init=%d)\n", gbl_trdpDictionary_1, preference_changed, trdp_parsebody_isinited()));
-		//proto_tree_add_text(trdp_spy_tree, tvb, 4, 4, "Found file %s", gbl_trdpDictionary_1); //output of the configuration file
+		//proto_tree_add text(trdp_spy_tree, tvb, 4, 4, "Found file %s", gbl_trdpDictionary_1); //output of the configuration file
 
 		ret = trdp_parsebody_init(&gbl_trdpDictionary_1);
 
 		if (ret != TRDP_PARSEBODY_OK)
 		{
-			expert_add_info_format(pinfo, NULL, PI_UNDECODED, PI_WARN, "Configuration could not be parsed, code: %d", ret);
+			expert_add_info_format(pinfo, NULL, &ei_trdp_spy_expert, /*PI_UNDECODED, PI_WARN*/"Configuration could not be parsed, code: %d", ret);
 			PRNT(printf("Configuration could not be parsed, code: %d", ret));
 			return offset;
 		}
@@ -326,12 +344,13 @@ guint32 dissect_trdp_generic_body(tvbuff_t *tvb, packet_info *pinfo, proto_tree 
         PRNT(printf("Could not find something %s : %d\n", (flag_dataset) ? "DATASET" : "COMID", trdp_spy_comid ));
     }
 
-	ti = proto_tree_add_text(trdp_spy_tree, tvb, offset, length, "Dataset id : %d (%s)", pFound->datasetId, (pFound->name) ? pFound->name->str : "");
-	trdp_spy_userdata = proto_item_add_subtree(ti, ett_trdp_spy_userdata);
+//	ti = proto_tree_add text(trdp_spy_tree, tvb, offset, length, "Dataset id : %d (%s)", pFound->datasetId, (pFound->name) ? pFound->name->str : "");
+//	trdp_spy_userdata = proto_item_add_subtree(ti, ett_trdp_spy_userdata);
+	trdp_spy_userdata = proto_tree_add_subtree_format(trdp_spy_tree, tvb, offset, length, ett_trdp_spy_userdata, &ti, "Dataset id : %d (%s)", pFound->datasetId, (pFound->name) ? pFound->name->str : "");
 
 	if (pFound->listOfElements <= 0)
 	{
-		expert_add_info_format(pinfo, NULL, PI_UNDECODED, PI_WARN, "Userdata should be empty.");
+		expert_add_info_format(pinfo, NULL, &ei_trdp_spy_expert, /*PI_UNDECODED, PI_WARN*/"Userdata should be empty.");
 		return offset;
 	}
 
@@ -366,7 +385,7 @@ guint32 dissect_trdp_generic_body(tvbuff_t *tvb, packet_info *pinfo, proto_tree 
                     value8u = 2;
 
                     /* Store the maximum possible length for the dynamic datastructure */
-                    value64 = tvb_length_remaining(tvb, offset) - TRDP_FCS_LENGTH;
+                    value64 = tvb_captured_length_remaining(tvb, offset) - TRDP_FCS_LENGTH;
 
                     /* Search for a zero to determine the end of the dynamic length field */
                     for(value32u = 0; value32u < value64; value32u++)
@@ -379,8 +398,9 @@ guint32 dissect_trdp_generic_body(tvbuff_t *tvb, packet_info *pinfo, proto_tree 
                     element_amount = value32u + 1; /* include the padding into the element */
                     value32u = 0; /* clear the borrowed variable */
 
-                    ti = proto_tree_add_text(trdp_spy_userdata, tvb, offset, element_amount, "%s [%d]", el->name->str, element_amount);
-                    userdata_actual = proto_item_add_subtree(ti, ett_trdp_spy_userdata);
+//                  ti = proto_tree_add text(trdp_spy_userdata, tvb, offset, element_amount, "%s [%d]", el->name->str, element_amount);
+//                  userdata_actual = proto_item_add_subtree(ti, ett_trdp_spy_userdata);
+                    userdata_actual = proto_tree_add_subtree_format(trdp_spy_userdata, tvb, offset, element_amount, ett_trdp_spy_userdata, &ti, "%s [%d]", el->name->str, element_amount);
                 }
                 else
                 {
@@ -389,7 +409,7 @@ guint32 dissect_trdp_generic_body(tvbuff_t *tvb, packet_info *pinfo, proto_tree 
                     offset += 2;
 
                     // check if the specified amount could be found in the package
-                    value64 = tvb_length_remaining(tvb, offset + element_amount * value32);
+                    value64 = tvb_captured_length_remaining(tvb, offset + element_amount * value32);
                     if (value64 > 0 && value64 < TRDP_FCS_LENGTH /* There will be always kept space for the FCS */)
                     {
                         element_amount = 0;
@@ -409,8 +429,9 @@ guint32 dissect_trdp_generic_body(tvbuff_t *tvb, packet_info *pinfo, proto_tree 
             if ((element_amount > 1  || element_amount == 0) && value8u != 2)
             {
 
-                ti = proto_tree_add_text(trdp_spy_userdata, tvb, offset, value16u, "%s [%d]", el->name->str, element_amount);
-                userdata_actual = proto_item_add_subtree(ti, ett_trdp_spy_userdata);
+//              ti = proto_tree_add text(trdp_spy_userdata, tvb, offset, value16u, "%s [%d]", el->name->str, element_amount);
+//              userdata_actual = proto_item_add_subtree(ti, ett_trdp_spy_userdata);
+                userdata_actual = proto_tree_add_subtree_format(trdp_spy_userdata, tvb, offset, value16u, ett_trdp_spy_userdata, &ti, "%s [%d]", el->name->str, element_amount);
             }
             else if (value8u != 2) /* check, that the dissector tree was not already modified handling dynamic datatypes */
             {
@@ -419,15 +440,16 @@ guint32 dissect_trdp_generic_body(tvbuff_t *tvb, packet_info *pinfo, proto_tree 
 
             if (value8u == 1)
             {
-                proto_tree_add_text(userdata_actual, tvb, offset, 2, "%d elements", element_amount);
+                //proto_tree_add text(userdata_actual, tvb, offset, 2, "%d elements", element_amount);
+                proto_tree_add_uint(userdata_actual, hf_trdp_spy_elements, tvb, offset, 2, element_amount);
                 offset += 2;
 
                 if (value64 > 0 && value64 < TRDP_FCS_LENGTH /*There will be always kept space for the FCS*/)
                 {
                     PRNT(printf("The dynamic size is too large: %s : has %d elements [%d byte each], but only %d left",
-                                el->name->str, element_amount, value32, tvb_length_remaining(tvb, offset)));
-                    proto_tree_add_text(userdata_actual, tvb, offset, value32, "%s : has %d elements [%d byte each], but only %d left",
-                                        el->name->str, element_amount, value32, tvb_length_remaining(tvb, offset));
+                                el->name->str, element_amount, value32, tvb_captured_length_remaining(tvb, offset)));
+                    proto_tree_add_uint_format(userdata_actual, hf_trdp_spy_elements, tvb, offset, value32, element_amount, "%s : has %d elements [%d byte each], but only %d left",
+                                        el->name->str, element_amount, value32, tvb_captured_length_remaining(tvb, offset));
                 }
             }
 
@@ -444,26 +466,26 @@ guint32 dissect_trdp_generic_body(tvbuff_t *tvb, packet_info *pinfo, proto_tree 
 		{
 		case TRDP_BOOL8: //	   1
 			value32 = tvb_get_guint8(tvb, offset);
-			proto_tree_add_text(userdata_actual, tvb, offset, 1, "%s : %s", el->name->str, (value32 == 0) ? "false" : "true");
+//			proto_tree_add_text(userdata_actual, tvb, offset, 1, "%s : %s", el->name->str, (value32 == 0) ? "false" : "true");
+			proto_tree_add_boolean_format(userdata_actual, -1, tvb, offset, 1, value32, "%s : %s", el->name->str, value32 ? "true" : "false");
 			offset += 1;
 			break;
 		case TRDP_CHAR8:
-			text = (gchar *) tvb_get_ephemeral_string(tvb, offset, element_amount);
-			proto_tree_add_text(userdata_actual, tvb, offset, element_amount, "%s : %s %s", el->name->str, text, (el->unit != 0) ? el->unit->str : "");
+			text = tvb_get_string_enc(wmem_packet_scope(), tvb, offset, element_amount, ENC_ASCII);
+//			proto_tree_add_text(userdata_actual, tvb, offset, element_amount, "%s : %s %s", el->name->str, text, (el->unit != 0) ? el->unit->str : "");
+			proto_tree_add_string_format(userdata_actual, -1, tvb, offset, element_amount, "%s : %s %s", el->name->str, text, el->unit ? el->unit->str : "");
 			offset += element_amount;
             array_id = element_amount - 1; // Jump to the next element (remove one, because this will be added automatically later)
 			break;
 		case TRDP_UTF16:
-			text = NULL;
-			text = tvb_get_unicode_string(tvb, offset, element_amount * 2, 0);
+			text = tvb_get_string_enc(wmem_packet_scope(), tvb, offset, element_amount * 2, ENC_UTF_16);
 			if (text != NULL)
 			{
-				proto_tree_add_text(userdata_actual, tvb, offset, element_amount * 2, "%s : %s %s", el->name->str, text, (el->unit != 0) ? el->unit->str : "");
-				g_free(text);
+				proto_tree_add_string_format(userdata_actual, -1, tvb, offset, element_amount * 2, "%s : %s %s", el->name->str, text, el->unit ? el->unit->str : "");
 			}
 			else
 			{
-				proto_tree_add_text(userdata_actual, tvb, offset, element_amount * 2, "%s could not extract UTF16 character", el->name->str);
+				proto_tree_add_string_format(userdata_actual, -1, tvb, offset, element_amount * 2, "%s could not extract UTF16 character", el->name->str);
 			}
 			offset +=(element_amount * 2);
 			array_id = element_amount - 1; // Jump to the next element (remove one, because this will be added automatically later)
@@ -472,7 +494,7 @@ guint32 dissect_trdp_generic_body(tvbuff_t *tvb, packet_info *pinfo, proto_tree 
 			value8 = (gint8) tvb_get_guint8(tvb, offset);
 			if (el->scale == 0)
 			{
-				proto_tree_add_text(userdata_actual, tvb, offset, 1, "%s : %d %s", el->name->str, value8 + el->offset, (el->unit != 0) ? el->unit->str : "");
+				proto_tree_add_int_format(userdata_actual, -1, tvb, offset, 1, value8 + el->offset, "%s : %d %s", el->name->str, value8 + el->offset, el->unit ? el->unit->str : "");
 			} else {
 				formated_value = (gdouble) value8; // the value will be displayed in the bottom of the loop
 			}
@@ -482,7 +504,7 @@ guint32 dissect_trdp_generic_body(tvbuff_t *tvb, packet_info *pinfo, proto_tree 
 			value16 = (gint16) tvb_get_ntohs(tvb, offset);
 			if (el->scale == 0)
 			{
-				proto_tree_add_text(userdata_actual, tvb, offset, 2, "%s : %d %s", el->name->str, value16, (el->unit != 0) ? el->unit->str : "");
+				proto_tree_add_int_format(userdata_actual, -1, tvb, offset, 2, value16 + el->offset, "%s : %d %s", el->name->str, value16 + el->offset, el->unit ? el->unit->str : "");
 			} else {
 				formated_value = (gdouble) value16; // the value will be displayed in the bottom of the loop
 			}
@@ -492,7 +514,7 @@ guint32 dissect_trdp_generic_body(tvbuff_t *tvb, packet_info *pinfo, proto_tree 
 			value32 = (gint32) tvb_get_ntohl(tvb, offset);
 			if (el->scale == 0)
 			{
-				proto_tree_add_text(userdata_actual, tvb, offset, 4, "%s : %d %s", el->name->str, value32, (el->unit != 0) ? el->unit->str : "");
+				proto_tree_add_int_format(userdata_actual, -1, tvb, offset, 4, value32 + el->offset, "%s : %d %s", el->name->str, value32 + el->offset, el->unit ? el->unit->str : "");
 			} else {
 				formated_value = (gdouble) value32; // the value will be displayed in the bottom of the loop
 			}
@@ -502,7 +524,7 @@ guint32 dissect_trdp_generic_body(tvbuff_t *tvb, packet_info *pinfo, proto_tree 
 			value64 = (gint64) tvb_get_ntoh64(tvb, offset);
 			if (el->scale == 0)
 			{
-				proto_tree_add_text(userdata_actual, tvb, offset, 8, "%s : %lld %s", el->name->str, value64, (el->unit != 0) ? el->unit->str : "");
+				proto_tree_add_int64_format(userdata_actual, -1, tvb, offset, 8, value64 + el->offset, "%s : %"G_GINT64_MODIFIER"d %s", el->name->str, value64 + el->offset, el->unit ? el->unit->str : "");
 			} else {
 				formated_value = (gdouble) value64; // the value will be displayed in the bottom of the loop
 			}
@@ -512,7 +534,7 @@ guint32 dissect_trdp_generic_body(tvbuff_t *tvb, packet_info *pinfo, proto_tree 
 			value8u = tvb_get_guint8(tvb, offset);
 			if (el->scale == 0)
 			{
-				proto_tree_add_text(userdata_actual, tvb, offset, 1, "%s : %d %s", el->name->str, value8u, (el->unit != 0) ? el->unit->str : "");
+				proto_tree_add_uint_format(userdata_actual, -1, tvb, offset, 1, value8u + el->offset, "%s : %u %s", el->name->str, value8u + el->offset, el->unit ? el->unit->str : "");
 			} else {
 				formated_value = (gdouble) value8u; // the value will be displayed in the bottom of the loop
 			}
@@ -522,7 +544,7 @@ guint32 dissect_trdp_generic_body(tvbuff_t *tvb, packet_info *pinfo, proto_tree 
 			value16u = tvb_get_ntohs(tvb, offset);
 			if (el->scale == 0)
 			{
-				proto_tree_add_text(userdata_actual, tvb, offset, 2, "%s : %d %s", el->name->str, value16u, (el->unit != 0) ? el->unit->str : "");
+				proto_tree_add_uint_format(userdata_actual, -1, tvb, offset, 2, value16u + el->offset, "%s : %u %s", el->name->str, value16u + el->offset, el->unit ? el->unit->str : "");
 			} else {
 				formated_value = (gdouble) value16u; // the value will be displayed in the bottom of the loop
 			}
@@ -532,7 +554,7 @@ guint32 dissect_trdp_generic_body(tvbuff_t *tvb, packet_info *pinfo, proto_tree 
 			value32u = tvb_get_ntohl(tvb, offset);
 			if (el->scale == 0)
 			{
-				proto_tree_add_text(userdata_actual, tvb, offset, 4, "%s : %d %s", el->name->str, value32u, (el->unit != 0) ? el->unit->str : "");
+				proto_tree_add_uint_format(userdata_actual, -1, tvb, offset, 4, value32u + el->offset, "%s : %u %s", el->name->str, value32u + el->offset, el->unit ? el->unit->str : "");
 			} else {
 				formated_value = (gdouble) value32u; // the value will be displayed in the bottom of the loop
 			}
@@ -542,39 +564,29 @@ guint32 dissect_trdp_generic_body(tvbuff_t *tvb, packet_info *pinfo, proto_tree 
 			value64u = tvb_get_ntoh64(tvb, offset);
 			if (el->scale == 0)
 			{
-				proto_tree_add_text(userdata_actual, tvb, offset, 8, "%s : %lld %s", el->name->str, value64u, (el->unit != 0) ? el->unit->str : "");
+				proto_tree_add_uint64_format(userdata_actual, -1, tvb, offset, 8, value64u + el->offset, "%s : %"G_GINT64_MODIFIER"u %s", el->name->str, value64u + el->offset, el->unit ? el->unit->str : "");
 			} else {
 				formated_value = (gdouble) value64u; // the value will be displayed in the bottom of the loop
 			}
 			offset += 8;
 			break;
 		case TRDP_REAL32:
-			real32 = tvb_get_ntohieee_float(tvb, offset);
-			if (el->scale == 0)
-			{
-				proto_tree_add_text(userdata_actual, tvb, offset, 4, "%s : %f %s", el->name->str, real32, (el->unit != 0) ? el->unit->str : "");
-			} else {
-				formated_value = (gdouble) real32; // the value will be displayed in the bottom of the loop
-			}
+			real64 = tvb_get_ntohieee_float(tvb, offset);
+			if (el->scale == 0) real64 = real64 * el->scale + el->offset;
+			proto_tree_add_float_format(userdata_actual, -1, tvb, offset, 4, real64, "%s : %f %s", el->name->str, real64, el->unit ? el->unit->str : "");
 			offset += 4;
 			break;
 		case TRDP_REAL64:
 			real64 = tvb_get_ntohieee_double(tvb, offset);
-			if (el->scale == 0)
-			{
-				proto_tree_add_text(userdata_actual, tvb, offset, 8, "%s : %lf %s", el->name->str, real64, (el->unit != 0) ? el->unit->str : "");
-			}
-			else
-			{
-				formated_value = (gdouble) real64; // the value will be displayed in the bottom of the loop
-			}
+			if (el->scale == 0) real64 = real64 * el->scale + el->offset;
+			proto_tree_add_double_format(userdata_actual, -1, tvb, offset, 8, real64, "%s : %lf %s", el->name->str, real64, el->unit ? el->unit->str : "");
 			offset += 8;
 			break;
 		case TRDP_TIMEDATE32:
 			memset(&time, 0, sizeof(time) );
 			value32u = tvb_get_ntohl(tvb, offset);
 			time.tv_sec = value32u;
-			proto_tree_add_text(userdata_actual, tvb, offset, 4, "%s : %s %s", el->name->str, g_time_val_to_iso8601(&time), (el->unit != 0) ? el->unit->str : "");
+			proto_tree_add_uint_format(userdata_actual, -1, tvb, offset, 4, value32u, "%s : %s %s", el->name->str, g_time_val_to_iso8601(&time), el->unit ? el->unit->str : "");
 			offset += 4;
 			break;
 		case TRDP_TIMEDATE48:
@@ -583,16 +595,18 @@ guint32 dissect_trdp_generic_body(tvbuff_t *tvb, packet_info *pinfo, proto_tree 
 			value16u = tvb_get_ntohs(tvb, offset + 4);
 			time.tv_sec = value32u;
 			//time.tv_usec TODO how are ticks calculated to microseconds
-			proto_tree_add_text(userdata_actual, tvb, offset, 6, "%s : %s %s", el->name->str, g_time_val_to_iso8601(&time), (el->unit != 0) ? el->unit->str : "");
+			proto_tree_add_uint_format(userdata_actual, -1, tvb, offset, 6, value32u, "%s : %s %s", el->name->str, g_time_val_to_iso8601(&time), el->unit ? el->unit->str : "");
 			offset += 6;
 			break;
 		case TRDP_TIMEDATE64:
 			memset(&time, 0, sizeof(time) );
 			value32u = tvb_get_ntohl(tvb, offset);
 			time.tv_sec = value32u;
+			value64u = value32u*1000000;
 			value32u = tvb_get_ntohl(tvb, offset + 4);
+			value64u+= value32u;
 			time.tv_usec = value32u;
-			proto_tree_add_text(userdata_actual, tvb, offset, 8, "%s : %s %s", el->name->str, g_time_val_to_iso8601(&time), (el->unit != 0) ? el->unit->str : "");
+			proto_tree_add_uint64_format(userdata_actual, -1, tvb, offset, 8, value64u, "%s : %s %s", el->name->str, g_time_val_to_iso8601(&time), el->unit ? el->unit->str : "");
 			offset += 8;
 			break;
 		default:
@@ -612,7 +626,7 @@ guint32 dissect_trdp_generic_body(tvbuff_t *tvb, packet_info *pinfo, proto_tree 
 		{
 				formated_value = (formated_value * el->scale) + el->offset;
 				value16 = trdp_dissect_width(el->type); // width of the element
-				proto_tree_add_text(userdata_actual, tvb, offset - value16, value16, "%s : %lf %s", el->name->str, formated_value, (el->unit != 0) ? el->unit->str : "");
+				proto_tree_add_double_format(userdata_actual, -1, tvb, offset - value16, value16, formated_value, "%s : %lf %s", el->name->str, formated_value, el->unit ? el->unit->str : "");
 		}
 		formated_value=0;
 
@@ -634,7 +648,7 @@ guint32 dissect_trdp_generic_body(tvbuff_t *tvb, packet_info *pinfo, proto_tree 
                 gActualNode = g_slist_next(gActualNode);
                 array_id = 0;
             }
-	}
+	    }
     }
 
     // When there is an dataset displayed, the FCS calculation is not necessary
@@ -678,15 +692,16 @@ static void build_trdp_tree(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
 	API_TRACE;
 
 	// when the package is big enough exract some data.
-	if (tvb_length_remaining(tvb, 0) > TRDP_HEADER_PD_OFFSET_RESERVED)
+	if (tvb_captured_length_remaining(tvb, 0) > TRDP_HEADER_PD_OFFSET_RESERVED)
 	{
 		// Fill the structure in the detail tree
 		ti = proto_tree_add_item(tree, proto_trdp_spy, tvb, 0, -1, FALSE);
 		trdp_spy_tree = proto_item_add_subtree(ti, ett_trdp_spy);
 
 		ti = proto_tree_add_item(trdp_spy_tree, hf_trdp_spy_sequencecounter, tvb, TRDP_HEADER_OFFSET_SEQCNT, 4, FALSE);
-		ti = proto_tree_add_text(trdp_spy_tree, tvb, 4, 2, "protocolVersion: %d.%d", tvb_get_guint8(tvb, TRDP_HEADER_OFFSET_PROTOVER), tvb_get_guint8(tvb, TRDP_HEADER_OFFSET_PROTOVER + 1));
-		proto_ver_tree = proto_item_add_subtree(ti, ett_trdp_proto_ver);
+//		ti = proto_tree_add text(trdp_spy_tree, tvb, 4, 2, "protocolVersion: %d.%d", tvb_get_guint8(tvb, TRDP_HEADER_OFFSET_PROTOVER), tvb_get_guint8(tvb, TRDP_HEADER_OFFSET_PROTOVER + 1));
+//		proto_ver_tree = proto_item_add_subtree(ti, ett_trdp_proto_ver);
+		proto_ver_tree = proto_tree_add_subtree_format(trdp_spy_tree, tvb, 4, 2, ett_trdp_proto_ver, &ti, "protocolVersion: %d.%d", tvb_get_guint8(tvb, TRDP_HEADER_OFFSET_PROTOVER), tvb_get_guint8(tvb, TRDP_HEADER_OFFSET_PROTOVER + 1));
 		ti = proto_tree_add_item(proto_ver_tree, hf_trdp_spy_protocolversion, tvb, TRDP_HEADER_OFFSET_PROTOVER, 2, FALSE); /* add the raw version of the protocol version in a subtree */
 		ti = proto_tree_add_item(trdp_spy_tree, hf_trdp_spy_type, tvb, TRDP_HEADER_OFFSET_TYPE, 2, FALSE);
 		ti = proto_tree_add_item(trdp_spy_tree, hf_trdp_spy_comid, tvb, TRDP_HEADER_OFFSET_COMID, 4, FALSE);
@@ -697,7 +712,7 @@ static void build_trdp_tree(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
 	}
 	else
 	{
-        expert_add_info_format(pinfo, NULL, PI_UNDECODED, PI_ERROR, "Packet too small for header information");
+        expert_add_info_format(pinfo, NULL, &ei_trdp_spy_expert, /*PI_MALFORMED, PI_ERROR*/ "Packet too small for header information");
 	}
 
 	if (trdp_spy_string > 0)
@@ -726,13 +741,13 @@ static void build_trdp_tree(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
 			dissect_trdp_body(tvb, pinfo, trdp_spy_tree, trdp_spy_comid, TRDP_HEADER_MD_OFFSET_DATA, datasetlength);
 			break;
 		default:
-			expert_add_info_format(pinfo, NULL, PI_UNDECODED, PI_WARN, "Unkown package format");
+			expert_add_info_format(pinfo, NULL, &ei_trdp_spy_expert, /*PI_UNDECODED, PI_WARN*/ "Unkown package format");
 			break;
 		}
 	}
 }
 
-void dissect_trdp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree)
+int dissect_trdp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data _U_)
 {
 	guint32 trdp_spy_comid = 0;
 	gchar* trdp_spy_string = NULL;
@@ -740,19 +755,13 @@ void dissect_trdp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree)
 	API_TRACE;
 
     /* Make entries in Protocol column ... */
-    if (check_col(pinfo->cinfo, COL_PROTOCOL))
-    {
-        col_set_str(pinfo->cinfo, COL_PROTOCOL, PROTO_TAG_TRDP);
-    }
+    col_set_str(pinfo->cinfo, COL_PROTOCOL, PROTO_TAG_TRDP);
 
     /* and "info" column on summary display */
-    if (check_col(pinfo->cinfo, COL_INFO))
-    {
-        col_clear(pinfo->cinfo, COL_INFO);
-    }
+    col_clear(pinfo->cinfo, COL_INFO);
 
     // Read required values from the package:
-    trdp_spy_string = (gchar *) tvb_get_ephemeral_string(tvb, TRDP_HEADER_OFFSET_TYPE, 2);
+    trdp_spy_string = (gchar *) tvb_get_string_enc(wmem_packet_scope(), tvb, TRDP_HEADER_OFFSET_TYPE, 2, ENC_ASCII);
     trdp_spy_comid = tvb_get_ntohl(tvb, TRDP_HEADER_OFFSET_COMID);
 
     /* Telegram that fits into one packet, or the header of huge telegram, that was reassembled */
@@ -765,50 +774,48 @@ void dissect_trdp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree)
     col_set_str(pinfo->cinfo, COL_INFO, "");
     col_append_fstr(pinfo->cinfo, COL_INFO, "comId: %10d ",trdp_spy_comid);
     /* Append the packet type into the information description */
-    if (check_col(pinfo->cinfo, COL_INFO))
+    if ((!strcmp(trdp_spy_string,"Pr")))
     {
-        if ((!strcmp(trdp_spy_string,"Pr")))
-        {
-            col_append_fstr(pinfo->cinfo, COL_INFO, "(PD Request)");
-        }
-        else if ((!strcmp(trdp_spy_string,"Pp")))
-        {
-            col_append_fstr(pinfo->cinfo, COL_INFO, "(PD Reply)");
-        }
-        else if ((!strcmp(trdp_spy_string,"Pd")))
-        {
-            col_append_fstr(pinfo->cinfo, COL_INFO, "(PD Data)");
-        }
-        else if ((!strcmp(trdp_spy_string,"Mn")))
-        {
-            col_append_fstr(pinfo->cinfo, COL_INFO, "(MD Notification (Request without reply))");
-        }
-        else if ((!strcmp(trdp_spy_string,"Mr")))
-        {
-            col_append_fstr(pinfo->cinfo, COL_INFO, "(MD Request with reply)");
-        }
-        else if ((!strcmp(trdp_spy_string,"Mp")))
-        {
-            col_append_fstr(pinfo->cinfo, COL_INFO, "(MD Reply (without confirmation))");
-        }
-        else if ((!strcmp(trdp_spy_string,"Mq")))
-        {
-            col_append_fstr(pinfo->cinfo, COL_INFO, "(MD Reply (with confirmation))");
-        }
-        else if ((!strcmp(trdp_spy_string,"Mc")))
-        {
-            col_append_fstr(pinfo->cinfo, COL_INFO, "(MD Confirm)");
-        }
-        else if ((!strcmp(trdp_spy_string,"Me")))
-        {
-            col_append_fstr(pinfo->cinfo, COL_INFO, "(MD error)");
-        }
-        else
-        {
-            col_append_fstr(pinfo->cinfo, COL_INFO, "Unknown TRDP Type");
-            expert_add_info_format(pinfo, NULL, PI_UNDECODED, PI_WARN, "Unknown TRDP Type");
-        }
+        col_append_fstr(pinfo->cinfo, COL_INFO, "(PD Request)");
     }
+    else if ((!strcmp(trdp_spy_string,"Pp")))
+    {
+        col_append_fstr(pinfo->cinfo, COL_INFO, "(PD Reply)");
+    }
+    else if ((!strcmp(trdp_spy_string,"Pd")))
+    {
+        col_append_fstr(pinfo->cinfo, COL_INFO, "(PD Data)");
+    }
+    else if ((!strcmp(trdp_spy_string,"Mn")))
+    {
+        col_append_fstr(pinfo->cinfo, COL_INFO, "(MD Notification (Request without reply))");
+    }
+    else if ((!strcmp(trdp_spy_string,"Mr")))
+    {
+        col_append_fstr(pinfo->cinfo, COL_INFO, "(MD Request with reply)");
+    }
+    else if ((!strcmp(trdp_spy_string,"Mp")))
+    {
+        col_append_fstr(pinfo->cinfo, COL_INFO, "(MD Reply (without confirmation))");
+    }
+    else if ((!strcmp(trdp_spy_string,"Mq")))
+    {
+        col_append_fstr(pinfo->cinfo, COL_INFO, "(MD Reply (with confirmation))");
+    }
+    else if ((!strcmp(trdp_spy_string,"Mc")))
+    {
+        col_append_fstr(pinfo->cinfo, COL_INFO, "(MD Confirm)");
+    }
+    else if ((!strcmp(trdp_spy_string,"Me")))
+    {
+        col_append_fstr(pinfo->cinfo, COL_INFO, "(MD error)");
+    }
+    else
+    {
+        col_append_fstr(pinfo->cinfo, COL_INFO, "Unknown TRDP Type");
+        expert_add_info_format(pinfo, NULL, &ei_trdp_spy_expert, /*PI_UNDECODED, PI_WARN*/ "Unknown TRDP Type");
+    }
+    return tvb_captured_length(tvb);
 }
 
 /* determine PDU length of protocol foo */
@@ -817,7 +824,7 @@ void dissect_trdp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree)
  * @internal
  * @brief retrieve the expected size of the transmitted packet.
  */
-static guint get_trdp_tcp_message_len(packet_info *pinfo, tvbuff_t *tvb, int offset)
+static guint get_trdp_tcp_message_len(packet_info *pinfo, tvbuff_t *tvb, int offset, void *data _U_)
 {
     guint datasetlength = (guint) tvb_get_ntohl(tvb, offset+16);
     return datasetlength + TRDP_MD_HEADERLENGTH + TRDP_FCS_LENGTH /* add padding, FIXME must be calculated */;
@@ -834,50 +841,55 @@ static guint get_trdp_tcp_message_len(packet_info *pinfo, tvbuff_t *tvb, int off
  *
  * @return nothing
  */
-static void dissect_trdp_tcp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree)
+static int dissect_trdp_tcp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data)
 {
     tcp_dissect_pdus(tvb, pinfo, tree, TRUE, TRDP_MD_HEADERLENGTH,
-                     get_trdp_tcp_message_len, dissect_trdp);
+                     get_trdp_tcp_message_len, dissect_trdp, data);
+    return tvb_captured_length(tvb);
 }
 
 void proto_register_trdp(void)
 {
     module_t *trdp_spy_module;
+    expert_module_t *expert_trdp_spy;
 
     /* Setup list of header fields  See Section 1.6.1 for details*/
     static hf_register_info hf[] =
     {
         /* All the general fields for the header */
-        { &hf_trdp_spy_sequencecounter,      { "sequenceCounter",      "trdp.sequencecounter",     FT_UINT32, BASE_DEC, NULL,   0x0, "", HFILL } },
-        { &hf_trdp_spy_protocolversion,      { "protocolVersion",      "trdp.protocolversion",     FT_UINT16, BASE_HEX, NULL,   0x0, "", HFILL } },
-        { &hf_trdp_spy_type,                 { "msgtype",                  "trdp.type",                FT_STRING, BASE_NONE, NULL, 0x0,     "", HFILL } },
-        { &hf_trdp_spy_comid,                { "comId",                "trdp.comid",               FT_UINT32, BASE_DEC, NULL, 0x0,     "", HFILL } },
-        { &hf_trdp_spy_etb_topocount,        { "etbTopoCnt",        "trdp.etbtopocnt",          FT_UINT32, BASE_DEC, NULL,   0x0, "", HFILL } },
-        { &hf_trdp_spy_op_trn_topocount,     { "opTrnTopoCnt",     "trdp.optrntopocnt",        FT_UINT32, BASE_DEC, NULL,   0x0, "", HFILL } },
-        { &hf_trdp_spy_datasetlength,        { "datasetLength",        "trdp.datasetlength",       FT_UINT32, BASE_DEC, NULL, 0x0,     "", HFILL } },
+        { &hf_trdp_spy_sequencecounter,      { "sequenceCounter",      "trdp.sequencecounter",     FT_UINT32, BASE_DEC, NULL,   0x0, NULL, HFILL } },
+        { &hf_trdp_spy_protocolversion,      { "protocolVersion",      "trdp.protocolversion",     FT_UINT16, BASE_HEX, NULL,   0x0, NULL, HFILL } },
+        { &hf_trdp_spy_type,                 { "msgtype",                  "trdp.type",                FT_STRING, BASE_NONE, NULL, 0x0, NULL, HFILL } },
+        { &hf_trdp_spy_comid,                { "comId",                "trdp.comid",               FT_UINT32, BASE_DEC, NULL, 0x0, NULL, HFILL } },
+        { &hf_trdp_spy_etb_topocount,        { "etbTopoCnt",        "trdp.etbtopocnt",          FT_UINT32, BASE_DEC, NULL,   0x0, NULL, HFILL } },
+        { &hf_trdp_spy_op_trn_topocount,     { "opTrnTopoCnt",     "trdp.optrntopocnt",        FT_UINT32, BASE_DEC, NULL,   0x0, NULL, HFILL } },
+        { &hf_trdp_spy_datasetlength,        { "datasetLength",        "trdp.datasetlength",       FT_UINT32, BASE_DEC, NULL, 0x0, NULL, HFILL } },
 
         /* PD specific stuff */
-        { &hf_trdp_spy_reserved,            { "reserved",               "trdp.reserved",    FT_UINT32, BASE_DEC, NULL, 0x0,     "", HFILL } },
-        { &hf_trdp_spy_reply_comid,         { "replyComId",        "trdp.replycomid",  FT_UINT32, BASE_DEC, NULL, 0x0,     "", HFILL } }, /* only used in a PD request */
-        { &hf_trdp_spy_reply_ipaddress,     { "replyIpAddress",       "trdp.replyip",     FT_IPv4, BASE_NONE, NULL, 0x0,     "", HFILL } },
-        { &hf_trdp_spy_isPD,                { "processData",           "trdp.pd",          FT_STRING, BASE_NONE, NULL, 0x0, "", HFILL } },
+        { &hf_trdp_spy_reserved,            { "reserved",               "trdp.reserved",    FT_UINT32, BASE_DEC, NULL, 0x0, NULL, HFILL } },
+        { &hf_trdp_spy_reply_comid,         { "replyComId",        "trdp.replycomid",  FT_UINT32, BASE_DEC, NULL, 0x0, NULL, HFILL } }, /* only used in a PD request */
+        { &hf_trdp_spy_reply_ipaddress,     { "replyIpAddress",       "trdp.replyip",     FT_IPv4, BASE_NONE, NULL, 0x0, NULL, HFILL } },
+        { &hf_trdp_spy_isPD,                { "processData",           "trdp.pd",          FT_STRING, BASE_NONE, NULL, 0x0, NULL, HFILL } },
 
         /* MD specific stuff */
-        { &hf_trdp_spy_replystatus,     { "replyStatus",  "trdp.replystatus",      FT_UINT32, BASE_DEC, NULL, 0x0,     "", HFILL } },
-        { &hf_trdp_spy_sessionid0,		{ "sessionId0",  "trdp.sessionid0",   FT_UINT32, BASE_HEX, NULL, 0x0,     "", HFILL } },
-        { &hf_trdp_spy_sessionid1,		{ "sessionId1",  "trdp.sessionid1",   FT_UINT32, BASE_HEX, NULL, 0x0,     "", HFILL } },
-        { &hf_trdp_spy_sessionid2,		{ "sessionId2",  "trdp.sessionid2",   FT_UINT32, BASE_HEX, NULL, 0x0,     "", HFILL } },
-        { &hf_trdp_spy_sessionid3,		{ "sessionId3",  "trdp.sessionid3",   FT_UINT32, BASE_HEX, NULL, 0x0,     "", HFILL } },
-        { &hf_trdp_spy_replytimeout,    { "replyTimeout",  "trdp.replytimeout",    FT_UINT32, BASE_DEC, NULL, 0x0,     "", HFILL } },
-        { &hf_trdp_spy_sourceURI,		{ "sourceUri",  "trdp.sourceUri",          FT_STRING, BASE_NONE, NULL, 0x0,     "", HFILL } },
-        { &hf_trdp_spy_destinationURI,  { "destinationURI",  "trdp.destinationUri",    FT_STRING, BASE_NONE, NULL, 0x0,     "", HFILL } },
-        { &hf_trdp_spy_isMD,      	    { "messageData",  "trdp.md",               FT_STRING, BASE_NONE, NULL, 0x0, "", HFILL } },
-        { &hf_trdp_spy_userdata,        { "dataset",   "trdp.rawdata",         FT_BYTES, BASE_NONE, NULL, 0x0,     "", HFILL } },
+        { &hf_trdp_spy_replystatus,     { "replyStatus",  "trdp.replystatus",      FT_UINT32, BASE_DEC, NULL, 0x0, NULL, HFILL } },
+        { &hf_trdp_spy_sessionid0,		{ "sessionId0",  "trdp.sessionid0",   FT_UINT32, BASE_HEX, NULL, 0x0, NULL, HFILL } },
+        { &hf_trdp_spy_sessionid1,		{ "sessionId1",  "trdp.sessionid1",   FT_UINT32, BASE_HEX, NULL, 0x0, NULL, HFILL } },
+        { &hf_trdp_spy_sessionid2,		{ "sessionId2",  "trdp.sessionid2",   FT_UINT32, BASE_HEX, NULL, 0x0, NULL, HFILL } },
+        { &hf_trdp_spy_sessionid3,		{ "sessionId3",  "trdp.sessionid3",   FT_UINT32, BASE_HEX, NULL, 0x0, NULL, HFILL } },
+        { &hf_trdp_spy_replytimeout,    { "replyTimeout",  "trdp.replytimeout",    FT_UINT32, BASE_DEC, NULL, 0x0, NULL, HFILL } },
+        { &hf_trdp_spy_sourceURI,		{ "sourceUri",  "trdp.sourceUri",          FT_STRING, BASE_NONE, NULL, 0x0, NULL, HFILL } },
+        { &hf_trdp_spy_destinationURI,  { "destinationURI",  "trdp.destinationUri",    FT_STRING, BASE_NONE, NULL, 0x0, NULL, HFILL } },
+        { &hf_trdp_spy_isMD,      	    { "messageData",  "trdp.md",               FT_STRING, BASE_NONE, NULL, 0x0, NULL, HFILL } },
+        { &hf_trdp_spy_userdata,        { "dataset",   "trdp.rawdata",         FT_BYTES, BASE_NONE, NULL, 0x0, NULL, HFILL } },
 
         /* The checksum for the header (the trdp.fcsheadcalc is only set, if the calculated FCS differs) */
-        { &hf_trdp_spy_fcs_head,             { "headerFcs",                "trdp.fcshead",     FT_UINT32, BASE_HEX, NULL, 0x0,     "", HFILL } },
-        { &hf_trdp_spy_fcs_head_calc,        { "calculatedHeaderFcs",     "trdp.fcsheadcalc", FT_UINT32, BASE_HEX, NULL, 0x0,     "", HFILL } },
-        { &hf_trdp_spy_fcs_head_data,        { "FCS (DATA)",                "trdp.fcsheaddata", FT_UINT32, BASE_HEX, NULL, 0x0,     "", HFILL } },
+        { &hf_trdp_spy_fcs_head,             { "headerFcs",                "trdp.fcshead",     FT_UINT32, BASE_HEX, NULL, 0x0, NULL, HFILL } },
+        { &hf_trdp_spy_fcs_head_calc,        { "calculatedHeaderFcs",     "trdp.fcsheadcalc", FT_UINT32, BASE_HEX, NULL, 0x0, NULL, HFILL } },
+        { &hf_trdp_spy_fcs_head_data,        { "FCS (DATA)",                "trdp.fcsheaddata", FT_UINT32, BASE_HEX, NULL, 0x0, NULL, HFILL } },
+
+        { &hf_trdp_spy_padding,         { "padding", "trdp.nonzeropadding", FT_BOOLEAN, 8, TFS(&tfs_padding_bit), 1, NULL, HFILL } }, 
+        { &hf_trdp_spy_elements,        { "elements","trdp.elements",       FT_UINT16,  BASE_DEC, NULL, 0x0, NULL, HFILL } }, 
 
     };
     /* Setup protocol subtree array */
@@ -887,7 +899,10 @@ void proto_register_trdp(void)
         &ett_trdp_spy_app_data_fcs,
         &ett_trdp_proto_ver,
     };
-
+    /* Setup protocol expert items */
+    static ei_register_info ei[] = {
+        { &ei_trdp_spy_expert, { "trdp.expert", PI_WARN, PI_UNDECODED, "", EXPFILL }},
+    };
     PRNT(printf("\n\n"));
     API_TRACE;
 
@@ -899,6 +914,10 @@ void proto_register_trdp(void)
     /* Required function calls to register the header fields and subtrees used */
     proto_register_field_array(proto_trdp_spy, hf, array_length(hf));
     proto_register_subtree_array(ett, array_length(ett));
+
+    /* Required function calls to register expert items */
+    expert_trdp_spy = expert_register_protocol(proto_trdp_spy);
+    expert_register_field_array(expert_trdp_spy, ei, array_length(ei));
 
     /* Register preferences module (See Section 2.6 for more on preferences) */
     trdp_spy_module = prefs_register_protocol(proto_trdp_spy, proto_reg_handoff_trdp);
@@ -934,23 +953,12 @@ void proto_reg_handoff_trdp(void)
     }
     else
     {
-#if VERSION_MAJOR >= 1 && VERSION_MICRO >= 6
         dissector_delete_uint("udp.port", g_pd_port, trdp_spy_handle);
         dissector_delete_uint("udp.port", g_md_port, trdp_spy_handle);
-	dissector_delete_uint("tcp.port", g_md_port, trdp_spy_TCP_handle);
-#else /* old API is used */
-        dissector_delete("udp.port", g_pd_port, trdp_spy_handle);
-        dissector_delete("udp.port", g_md_port, trdp_spy_handle);
-	dissector_delete("tcp.port", g_md_port, trdp_spy_TCP_handle);
-#endif
+		dissector_delete_uint("tcp.port", g_md_port, trdp_spy_TCP_handle);
     }
-#if VERSION_MAJOR >= 1 && VERSION_MICRO >= 6
+
     dissector_add_uint("udp.port", g_pd_port, trdp_spy_handle);
     dissector_add_uint("udp.port", g_md_port, trdp_spy_handle);
     dissector_add_uint("tcp.port", g_md_port, trdp_spy_TCP_handle);
-#else /* old API is used */
-    dissector_add("udp.port", g_pd_port, trdp_spy_handle);
-    dissector_add("udp.port", g_md_port, trdp_spy_handle);
-    dissector_add("tcp.port", g_md_port, trdp_spy_TCP_handle);
-#endif
 }

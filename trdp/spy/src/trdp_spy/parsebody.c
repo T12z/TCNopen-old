@@ -119,7 +119,7 @@ processNodes(xmlNodeSetPtr nodes)
                 continue;
             // extract the id, if possible
             text = (const char*) xmlGetProp(cur, xmlCharStrdup(ATTR_DATASET_ID));
-            if (text <= NULL)
+            if (text <= (const char*)NULL)
             {
                 continue;
             }
