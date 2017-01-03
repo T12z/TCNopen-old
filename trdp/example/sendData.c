@@ -227,7 +227,7 @@ int main (int argc, char *argv[])
     /*    Open a session  */
     if (tlc_openSession(&appHandle,
                         ownIP, 0,               /* use default IP address           */
-                        NULL,                   /* no Marshalling                   */
+                        NULL,                   /* no marshalling                   */
                         &pdConfiguration, NULL, /* system defaults for PD and MD    */
                         &processConfig) != TRDP_NO_ERR)
     {
@@ -325,7 +325,7 @@ int main (int argc, char *argv[])
             printf(".");
             fflush(stdout);
         }
-        /* Just wright data (currently data does not change) */
+        /* Just write data (currently data does not change) */
         err = tlp_put(appHandle, pubHandle, gData, dataSize);
         if (err != TRDP_NO_ERR)
         {
