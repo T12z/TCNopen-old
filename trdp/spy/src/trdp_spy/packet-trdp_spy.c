@@ -110,6 +110,22 @@ static int hf_trdp_spy_isMD 	= -1;           /*flag*/
 /* extra fields from former _add_text */
 static int hf_trdp_spy_padding = -1;            /*flag*/
 static int hf_trdp_spy_elements = -1;
+static int hf_trdp_spy_elementsB = -1;
+static int hf_trdp_spy_elementsC8 = -1;
+static int hf_trdp_spy_elementsC16 = -1;
+static int hf_trdp_spy_elementsI8 = -1;
+static int hf_trdp_spy_elementsI16 = -1;
+static int hf_trdp_spy_elementsI32 = -1;
+static int hf_trdp_spy_elementsI64 = -1;
+static int hf_trdp_spy_elementsU8 = -1;
+static int hf_trdp_spy_elementsU16 = -1;
+static int hf_trdp_spy_elementsU32 = -1;
+static int hf_trdp_spy_elementsU64 = -1;
+static int hf_trdp_spy_elementsR32 = -1;
+static int hf_trdp_spy_elementsR64 = -1;
+static int hf_trdp_spy_elementsT32 = -1;
+static int hf_trdp_spy_elementsT48 = -1;
+static int hf_trdp_spy_elementsT64 = -1;
 
 /* expert info */
 static expert_field ei_trdp_spy_expert = EI_INIT;
@@ -125,6 +141,11 @@ static const value_string trdp_spy_subs_code_vals[] =
     {0, NULL},
 };
 */
+
+static const true_false_string tfs_tf_bit = {
+    "false",
+    "true"
+};
 
 static const true_false_string tfs_padding_bit = {
     "zero-padding",
@@ -467,13 +488,13 @@ guint32 dissect_trdp_generic_body(tvbuff_t *tvb, packet_info *pinfo, proto_tree 
 		case TRDP_BOOL8: //	   1
 			value32 = tvb_get_guint8(tvb, offset);
 //			proto_tree_add_text(userdata_actual, tvb, offset, 1, "%s : %s", el->name->str, (value32 == 0) ? "false" : "true");
-			proto_tree_add_boolean_format(userdata_actual, -1, tvb, offset, 1, value32, "%s : %s", el->name->str, value32 ? "true" : "false");
+			proto_tree_add_boolean_format(userdata_actual, /***/hf_trdp_spy_elementsB, tvb, offset, 1, value32, "%s : %s", el->name->str, value32 ? "true" : "false");
 			offset += 1;
 			break;
 		case TRDP_CHAR8:
 			text = tvb_get_string_enc(wmem_packet_scope(), tvb, offset, element_amount, ENC_ASCII);
 //			proto_tree_add_text(userdata_actual, tvb, offset, element_amount, "%s : %s %s", el->name->str, text, (el->unit != 0) ? el->unit->str : "");
-			proto_tree_add_string_format(userdata_actual, -1, tvb, offset, element_amount, "%s : %s %s", el->name->str, text, el->unit ? el->unit->str : "");
+			proto_tree_add_string_format(userdata_actual, /***/hf_trdp_spy_elementsC8, tvb, offset, element_amount, "%s : %s %s", el->name->str, text, el->unit ? el->unit->str : "");
 			offset += element_amount;
             array_id = element_amount - 1; // Jump to the next element (remove one, because this will be added automatically later)
 			break;
@@ -481,11 +502,11 @@ guint32 dissect_trdp_generic_body(tvbuff_t *tvb, packet_info *pinfo, proto_tree 
 			text = tvb_get_string_enc(wmem_packet_scope(), tvb, offset, element_amount * 2, ENC_UTF_16);
 			if (text != NULL)
 			{
-				proto_tree_add_string_format(userdata_actual, -1, tvb, offset, element_amount * 2, "%s : %s %s", el->name->str, text, el->unit ? el->unit->str : "");
+				proto_tree_add_string_format(userdata_actual, /***/hf_trdp_spy_elementsC16, tvb, offset, element_amount * 2, "%s : %s %s", el->name->str, text, el->unit ? el->unit->str : "");
 			}
 			else
 			{
-				proto_tree_add_string_format(userdata_actual, -1, tvb, offset, element_amount * 2, "%s could not extract UTF16 character", el->name->str);
+				proto_tree_add_string_format(userdata_actual, /***/hf_trdp_spy_elementsC8, tvb, offset, element_amount * 2, "%s could not extract UTF16 character", el->name->str);
 			}
 			offset +=(element_amount * 2);
 			array_id = element_amount - 1; // Jump to the next element (remove one, because this will be added automatically later)
@@ -494,7 +515,7 @@ guint32 dissect_trdp_generic_body(tvbuff_t *tvb, packet_info *pinfo, proto_tree 
 			value8 = (gint8) tvb_get_guint8(tvb, offset);
 			if (el->scale == 0)
 			{
-				proto_tree_add_int_format(userdata_actual, -1, tvb, offset, 1, value8 + el->offset, "%s : %d %s", el->name->str, value8 + el->offset, el->unit ? el->unit->str : "");
+				proto_tree_add_int_format(userdata_actual, /***/hf_trdp_spy_elementsI8, tvb, offset, 1, value8 + el->offset, "%s : %d %s", el->name->str, value8 + el->offset, el->unit ? el->unit->str : "");
 			} else {
 				formated_value = (gdouble) value8; // the value will be displayed in the bottom of the loop
 			}
@@ -504,7 +525,7 @@ guint32 dissect_trdp_generic_body(tvbuff_t *tvb, packet_info *pinfo, proto_tree 
 			value16 = (gint16) tvb_get_ntohs(tvb, offset);
 			if (el->scale == 0)
 			{
-				proto_tree_add_int_format(userdata_actual, -1, tvb, offset, 2, value16 + el->offset, "%s : %d %s", el->name->str, value16 + el->offset, el->unit ? el->unit->str : "");
+				proto_tree_add_int_format(userdata_actual, /***/hf_trdp_spy_elementsI16, tvb, offset, 2, value16 + el->offset, "%s : %d %s", el->name->str, value16 + el->offset, el->unit ? el->unit->str : "");
 			} else {
 				formated_value = (gdouble) value16; // the value will be displayed in the bottom of the loop
 			}
@@ -514,7 +535,7 @@ guint32 dissect_trdp_generic_body(tvbuff_t *tvb, packet_info *pinfo, proto_tree 
 			value32 = (gint32) tvb_get_ntohl(tvb, offset);
 			if (el->scale == 0)
 			{
-				proto_tree_add_int_format(userdata_actual, -1, tvb, offset, 4, value32 + el->offset, "%s : %d %s", el->name->str, value32 + el->offset, el->unit ? el->unit->str : "");
+				proto_tree_add_int_format(userdata_actual, /***/hf_trdp_spy_elementsI32, tvb, offset, 4, value32 + el->offset, "%s : %d %s", el->name->str, value32 + el->offset, el->unit ? el->unit->str : "");
 			} else {
 				formated_value = (gdouble) value32; // the value will be displayed in the bottom of the loop
 			}
@@ -524,7 +545,7 @@ guint32 dissect_trdp_generic_body(tvbuff_t *tvb, packet_info *pinfo, proto_tree 
 			value64 = (gint64) tvb_get_ntoh64(tvb, offset);
 			if (el->scale == 0)
 			{
-				proto_tree_add_int64_format(userdata_actual, -1, tvb, offset, 8, value64 + el->offset, "%s : %"G_GINT64_MODIFIER"d %s", el->name->str, value64 + el->offset, el->unit ? el->unit->str : "");
+				proto_tree_add_int64_format(userdata_actual, /***/hf_trdp_spy_elementsI64, tvb, offset, 8, value64 + el->offset, "%s : %"G_GINT64_MODIFIER"d %s", el->name->str, value64 + el->offset, el->unit ? el->unit->str : "");
 			} else {
 				formated_value = (gdouble) value64; // the value will be displayed in the bottom of the loop
 			}
@@ -534,7 +555,7 @@ guint32 dissect_trdp_generic_body(tvbuff_t *tvb, packet_info *pinfo, proto_tree 
 			value8u = tvb_get_guint8(tvb, offset);
 			if (el->scale == 0)
 			{
-				proto_tree_add_uint_format(userdata_actual, -1, tvb, offset, 1, value8u + el->offset, "%s : %u %s", el->name->str, value8u + el->offset, el->unit ? el->unit->str : "");
+				proto_tree_add_uint_format(userdata_actual, /***/hf_trdp_spy_elementsU8, tvb, offset, 1, value8u + el->offset, "%s : %u %s", el->name->str, value8u + el->offset, el->unit ? el->unit->str : "");
 			} else {
 				formated_value = (gdouble) value8u; // the value will be displayed in the bottom of the loop
 			}
@@ -544,7 +565,7 @@ guint32 dissect_trdp_generic_body(tvbuff_t *tvb, packet_info *pinfo, proto_tree 
 			value16u = tvb_get_ntohs(tvb, offset);
 			if (el->scale == 0)
 			{
-				proto_tree_add_uint_format(userdata_actual, -1, tvb, offset, 2, value16u + el->offset, "%s : %u %s", el->name->str, value16u + el->offset, el->unit ? el->unit->str : "");
+				proto_tree_add_uint_format(userdata_actual, /***/hf_trdp_spy_elementsU16, tvb, offset, 2, value16u + el->offset, "%s : %u %s", el->name->str, value16u + el->offset, el->unit ? el->unit->str : "");
 			} else {
 				formated_value = (gdouble) value16u; // the value will be displayed in the bottom of the loop
 			}
@@ -554,7 +575,7 @@ guint32 dissect_trdp_generic_body(tvbuff_t *tvb, packet_info *pinfo, proto_tree 
 			value32u = tvb_get_ntohl(tvb, offset);
 			if (el->scale == 0)
 			{
-				proto_tree_add_uint_format(userdata_actual, -1, tvb, offset, 4, value32u + el->offset, "%s : %u %s", el->name->str, value32u + el->offset, el->unit ? el->unit->str : "");
+				proto_tree_add_uint_format(userdata_actual, /***/hf_trdp_spy_elementsU32, tvb, offset, 4, value32u + el->offset, "%s : %u %s", el->name->str, value32u + el->offset, el->unit ? el->unit->str : "");
 			} else {
 				formated_value = (gdouble) value32u; // the value will be displayed in the bottom of the loop
 			}
@@ -564,7 +585,7 @@ guint32 dissect_trdp_generic_body(tvbuff_t *tvb, packet_info *pinfo, proto_tree 
 			value64u = tvb_get_ntoh64(tvb, offset);
 			if (el->scale == 0)
 			{
-				proto_tree_add_uint64_format(userdata_actual, -1, tvb, offset, 8, value64u + el->offset, "%s : %"G_GINT64_MODIFIER"u %s", el->name->str, value64u + el->offset, el->unit ? el->unit->str : "");
+				proto_tree_add_uint64_format(userdata_actual, /***/hf_trdp_spy_elementsU64, tvb, offset, 8, value64u + el->offset, "%s : %"G_GINT64_MODIFIER"u %s", el->name->str, value64u + el->offset, el->unit ? el->unit->str : "");
 			} else {
 				formated_value = (gdouble) value64u; // the value will be displayed in the bottom of the loop
 			}
@@ -573,20 +594,20 @@ guint32 dissect_trdp_generic_body(tvbuff_t *tvb, packet_info *pinfo, proto_tree 
 		case TRDP_REAL32:
 			real64 = tvb_get_ntohieee_float(tvb, offset);
 			if (el->scale == 0) real64 = real64 * el->scale + el->offset;
-			proto_tree_add_float_format(userdata_actual, -1, tvb, offset, 4, real64, "%s : %f %s", el->name->str, real64, el->unit ? el->unit->str : "");
+			proto_tree_add_float_format(userdata_actual, /***/hf_trdp_spy_elementsR32, tvb, offset, 4, (gfloat)real64, "%s : %f %s", el->name->str, real64, el->unit ? el->unit->str : "");
 			offset += 4;
 			break;
 		case TRDP_REAL64:
 			real64 = tvb_get_ntohieee_double(tvb, offset);
 			if (el->scale == 0) real64 = real64 * el->scale + el->offset;
-			proto_tree_add_double_format(userdata_actual, -1, tvb, offset, 8, real64, "%s : %lf %s", el->name->str, real64, el->unit ? el->unit->str : "");
+			proto_tree_add_double_format(userdata_actual, /***/hf_trdp_spy_elementsR64, tvb, offset, 8, real64, "%s : %lf %s", el->name->str, real64, el->unit ? el->unit->str : "");
 			offset += 8;
 			break;
 		case TRDP_TIMEDATE32:
 			memset(&time, 0, sizeof(time) );
 			value32u = tvb_get_ntohl(tvb, offset);
 			time.tv_sec = value32u;
-			proto_tree_add_uint_format(userdata_actual, -1, tvb, offset, 4, value32u, "%s : %s %s", el->name->str, g_time_val_to_iso8601(&time), el->unit ? el->unit->str : "");
+			proto_tree_add_uint_format(userdata_actual, /***/hf_trdp_spy_elementsT32, tvb, offset, 4, value32u, "%s : %s %s", el->name->str, g_time_val_to_iso8601(&time), el->unit ? el->unit->str : "");
 			offset += 4;
 			break;
 		case TRDP_TIMEDATE48:
@@ -595,7 +616,7 @@ guint32 dissect_trdp_generic_body(tvbuff_t *tvb, packet_info *pinfo, proto_tree 
 			value16u = tvb_get_ntohs(tvb, offset + 4);
 			time.tv_sec = value32u;
 			//time.tv_usec TODO how are ticks calculated to microseconds
-			proto_tree_add_uint_format(userdata_actual, -1, tvb, offset, 6, value32u, "%s : %s %s", el->name->str, g_time_val_to_iso8601(&time), el->unit ? el->unit->str : "");
+			proto_tree_add_uint_format(userdata_actual, /***/hf_trdp_spy_elementsT48, tvb, offset, 6, value32u, "%s : %s %s", el->name->str, g_time_val_to_iso8601(&time), el->unit ? el->unit->str : "");
 			offset += 6;
 			break;
 		case TRDP_TIMEDATE64:
@@ -606,7 +627,7 @@ guint32 dissect_trdp_generic_body(tvbuff_t *tvb, packet_info *pinfo, proto_tree 
 			value32u = tvb_get_ntohl(tvb, offset + 4);
 			value64u+= value32u;
 			time.tv_usec = value32u;
-			proto_tree_add_uint64_format(userdata_actual, -1, tvb, offset, 8, value64u, "%s : %s %s", el->name->str, g_time_val_to_iso8601(&time), el->unit ? el->unit->str : "");
+			proto_tree_add_uint64_format(userdata_actual, /***/hf_trdp_spy_elementsT64, tvb, offset, 8, value64u, "%s : %s %s", el->name->str, g_time_val_to_iso8601(&time), el->unit ? el->unit->str : "");
 			offset += 8;
 			break;
 		default:
@@ -626,7 +647,7 @@ guint32 dissect_trdp_generic_body(tvbuff_t *tvb, packet_info *pinfo, proto_tree 
 		{
 				formated_value = (formated_value * el->scale) + el->offset;
 				value16 = trdp_dissect_width(el->type); // width of the element
-				proto_tree_add_double_format(userdata_actual, -1, tvb, offset - value16, value16, formated_value, "%s : %lf %s", el->name->str, formated_value, el->unit ? el->unit->str : "");
+				proto_tree_add_double_format(userdata_actual, /***/hf_trdp_spy_elementsR64, tvb, offset - value16, value16, formated_value, "%s : %lf %s", el->name->str, formated_value, el->unit ? el->unit->str : "");
 		}
 		formated_value=0;
 
@@ -891,6 +912,22 @@ void proto_register_trdp(void)
         { &hf_trdp_spy_padding,         { "padding", "trdp.nonzeropadding", FT_BOOLEAN, 8, TFS(&tfs_padding_bit), 1, NULL, HFILL } }, 
         { &hf_trdp_spy_elements,        { "elements","trdp.elements",       FT_UINT16,  BASE_DEC, NULL, 0x0, NULL, HFILL } }, 
 
+		{ &hf_trdp_spy_elementsB,       { "elements","trdp.elements.bool",  FT_BOOLEAN, 8, TFS(&tfs_tf_bit), 1, NULL, HFILL } },
+		{ &hf_trdp_spy_elementsC8,      { "elements","trdp.elements.char",  FT_STRING,  STR_ASCII, NULL, 0x0, NULL, HFILL } },
+        { &hf_trdp_spy_elementsC16,     { "elements","trdp.elements.wchar", FT_STRING,  STR_UNICODE, NULL, 0x0, NULL, HFILL } },
+        { &hf_trdp_spy_elementsI8,      { "elements","trdp.elements.i8",    FT_INT8,   BASE_DEC, NULL, 0x0, NULL, HFILL } },
+        { &hf_trdp_spy_elementsI16,     { "elements","trdp.elements.i16",   FT_INT16,  BASE_DEC, NULL, 0x0, NULL, HFILL } },
+        { &hf_trdp_spy_elementsI32,     { "elements","trdp.elements.i32",   FT_INT32,  BASE_DEC, NULL, 0x0, NULL, HFILL } },
+        { &hf_trdp_spy_elementsI64,     { "elements","trdp.elements.i64",   FT_INT64,  BASE_DEC, NULL, 0x0, NULL, HFILL } },
+        { &hf_trdp_spy_elementsU8,      { "elements","trdp.elements.u8",    FT_UINT8,   BASE_DEC, NULL, 0x0, NULL, HFILL } },
+        { &hf_trdp_spy_elementsU16,     { "elements","trdp.elements.u16",   FT_UINT16,  BASE_DEC, NULL, 0x0, NULL, HFILL } },
+        { &hf_trdp_spy_elementsU32,     { "elements","trdp.elements.u32",   FT_UINT32,  BASE_DEC, NULL, 0x0, NULL, HFILL } },
+        { &hf_trdp_spy_elementsU64,     { "elements","trdp.elements.u64",   FT_UINT64,  BASE_DEC, NULL, 0x0, NULL, HFILL } },
+        { &hf_trdp_spy_elementsR32,     { "elements","trdp.elements.float", FT_FLOAT,  BASE_FLOAT, NULL, 0x0, NULL, HFILL } },
+        { &hf_trdp_spy_elementsR64,     { "elements","trdp.elements.double",FT_DOUBLE,  BASE_FLOAT, NULL, 0x0, NULL, HFILL } },
+        { &hf_trdp_spy_elementsT32,     { "elements","trdp.elements.time32",FT_UINT32,  BASE_DEC, NULL, 0x0, NULL, HFILL } },
+        { &hf_trdp_spy_elementsT48,     { "elements","trdp.elements.time48",FT_UINT32,  BASE_DEC, NULL, 0x0, NULL, HFILL } },
+        { &hf_trdp_spy_elementsT64,     { "elements","trdp.elements.time64",FT_UINT64,  BASE_DEC, NULL, 0x0, NULL, HFILL } },
     };
     /* Setup protocol subtree array */
     static gint *ett[] = {
