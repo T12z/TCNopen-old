@@ -1,0 +1,4 @@
+trdp/bld/
+trdp/doc/html/
+trdp/doc/latex/
+*.o
