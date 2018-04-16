@@ -4,6 +4,7 @@ This is a "private" fork of TCNopen (Components for IEC61375 standardised commun
 Added value:
  - roughly updated code for TRDP-Spy to fit newer Wireshark versions (> 2), though not really tested, as I have no TRDP setup to really test it on and know what to expect
  - it is a GIT mirror
+ - this branch is an archive of my 2017 work. It will not receive any further commits.
  
 Goal of fork:
  - for me to play around
