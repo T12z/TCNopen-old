@@ -1,18 +1,11 @@
 # TCNopen fork
 This is a "private" fork of TCNopen (Components for IEC61375 standardised communication)
 
-Added value:
- - roughly updated code for TRDP-Spy to fit newer Wireshark versions (> 2), though not really tested, as I have no TRDP setup to really test it on and know what to expect
- - it is a GIT mirror
+## Upstream Branch
+ - This branch only contains minimal gitification and the upstream work.
+ - I will try to update this every now and then, though NOT on a regular basis.
+ - Any further changes that I deem pushable, will land in the master branch (https://github.com/T12z/TCNopen/tree/master).
  
-Goal of fork:
- - for me to play around
- - nothing else, no product, no specific enhancements
- 
-Missing:
- - Updates. This is NOT in sync nor latest update from original sourceforge SVN
- - Support. I am no TRDP expert, neither have I project funds to work on TRDP
-
 More information from SourceForge site: https://sourceforge.net/projects/tcnopen/
 
 # Original Description
