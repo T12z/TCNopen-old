@@ -498,28 +498,57 @@ static TRDP_ERR_T printDatasetElem(UINT8 * pBuff, UINT32 * pOffset, UINT32 elemT
 }
 
 /*********************************************************************************************************************/
+/** Search local data sets for given ID
+ */
+static TRDP_ERR_T findDataset(UINT32 datasetId, TRDP_DATASET_T **pDatasetDesc) {
+	UINT32 i;
+
+    /*  Find data set for the ID   */
+    for (i = 0; pDatasetDesc && i < numDataset; i++) {
+        if (apDataset[i] && apDataset[i]->id == datasetId) {
+        	*pDatasetDesc = apDataset[i];
+            return TRDP_NO_ERR;
+        }
+    }
+
+    return TRDP_PARAM_ERR;
+}
+
+/*********************************************************************************************************************/
 /** Fill given dataset buffer with fresh value
  */
-static TRDP_ERR_T fillDataset(pTRDP_DATASET_T pDatasetDesc, DATASET_T * pDataset)
+static TRDP_ERR_T fillDataset(pTRDP_DATASET_T pDatasetDesc, DATASET_T * pDataset, UINT32 *pSubsetOffset)
 {
     UINT32 elmIdx;
-    UINT32 offset;
     TRDP_ERR_T result;
+    UINT32 offset;
 
+    if ( !pSubsetOffset ) {
+    	offset = 0;
+    	pSubsetOffset = &offset;
+    }
     /*  Iterate over all elements in dataset, fill them with global counter value    */
-    offset = 0;
     for (elmIdx = 0; elmIdx < pDatasetDesc->numElement; elmIdx++)
     {
-        result = fillDatasetElem(
-            (UINT8 *)pDataset->buffer, &offset, 
-            pDatasetDesc->pElement[elmIdx].type, pDatasetDesc->pElement[elmIdx].size);
+    	if (pDatasetDesc->pElement[elmIdx].type > TRDP_TYPE_MAX) {
+    		pTRDP_DATASET_T pSubsetDesc;
+    		UINT32 subsetIdx = 0;
+    		result = findDataset(pDatasetDesc->pElement[elmIdx].type, &pSubsetDesc);
+    		while ((result == TRDP_NO_ERR) && (subsetIdx++ < pDatasetDesc->pElement[elmIdx].size)) {
+    			result = fillDataset(pSubsetDesc, pDataset, pSubsetOffset);
+    		}
+    	} else {
+			result = fillDatasetElem(
+				(UINT8 *)pDataset->buffer, pSubsetOffset,
+				pDatasetDesc->pElement[elmIdx].type, pDatasetDesc->pElement[elmIdx].size);
+    	}
         if (result != TRDP_NO_ERR)
         {
             printf("Failed to fill element %u in dataset ID %u\n", elmIdx, pDatasetDesc->id);
             return result;
         }
         /*  Store dataset length    */
-        pDataset->size = offset;
+        pDataset->size = *pSubsetOffset;
     }
 
     return TRDP_NO_ERR;
@@ -528,19 +557,31 @@ static TRDP_ERR_T fillDataset(pTRDP_DATASET_T pDatasetDesc, DATASET_T * pDataset
 /*********************************************************************************************************************/
 /** Print given dataset buffer
  */
-static TRDP_ERR_T printDataset(pTRDP_DATASET_T pDatasetDesc, DATASET_T * pDataset)
+static TRDP_ERR_T printDataset(pTRDP_DATASET_T pDatasetDesc, DATASET_T * pDataset, UINT32 *pSubsetOffset)
 {
     UINT32 elmIdx;
     UINT32 offset;
     TRDP_ERR_T result;
 
+    if ( !pSubsetOffset ) {
+    	offset = 0;
+    	pSubsetOffset = &offset;
+    }
     /*  Iterate over all elements in dataset, fill them with global counter value    */
-    offset = 0;
     for (elmIdx = 0; elmIdx < pDatasetDesc->numElement; elmIdx++)
     {
-        result = printDatasetElem(
-            (UINT8 *)pDataset->buffer, &offset, 
-            pDatasetDesc->pElement[elmIdx].type, pDatasetDesc->pElement[elmIdx].size);
+    	if (pDatasetDesc->pElement[elmIdx].type > TRDP_TYPE_MAX) {
+    		pTRDP_DATASET_T pSubsetDesc;
+    		UINT32 subsetIdx = 0;
+    		result = findDataset(pDatasetDesc->pElement[elmIdx].type, &pSubsetDesc);
+    		while ((result == TRDP_NO_ERR) && (subsetIdx++ < pDatasetDesc->pElement[elmIdx].size)) {
+    			result = printDataset(pSubsetDesc, pDataset, pSubsetOffset);
+    		}
+    	} else {
+			result = printDatasetElem(
+				(UINT8 *)pDataset->buffer, pSubsetOffset,
+				pDatasetDesc->pElement[elmIdx].type, pDatasetDesc->pElement[elmIdx].size);
+    	}
         if (result != TRDP_NO_ERR)
         {
             printf("Failed to print element %u in dataset ID %u\n", elmIdx, pDatasetDesc->id);
@@ -602,10 +643,8 @@ static TRDP_ERR_T publishTelegram(UINT32 ifcIdx, TRDP_EXCHG_PAR_T * pExchgPar)
     TRDP_ERR_T result;
 
     /*  Find dataset for the telegram   */
-    for (i = 0; i < numDataset; i++)
-        if (apDataset[i]->id == pExchgPar->datasetId)
-            pDatasetDesc = apDataset[i];
-    if (!pDatasetDesc)
+    result = findDataset(pExchgPar->datasetId, &pDatasetDesc);
+    if (result != TRDP_NO_ERR)
     {
         printf("Unknown datasetId %u for comID %u\n", pExchgPar->datasetId, pExchgPar->comId);
         return TRDP_PARAM_ERR;
@@ -661,7 +700,7 @@ static TRDP_ERR_T publishTelegram(UINT32 ifcIdx, TRDP_EXCHG_PAR_T * pExchgPar)
         pPubTlg->comID = pExchgPar->comId;
         pPubTlg->dstID = pExchgPar->pDest[i].id;
         /*  Initialize telegram dataset */
-        result = fillDataset(pPubTlg->pDatasetDesc, &pPubTlg->dataset);
+        result = fillDataset(pPubTlg->pDatasetDesc, &pPubTlg->dataset, NULL);
         if (result != TRDP_NO_ERR)
         {
             printf("Failed to initialize dataset for comID %u, destID %u\n", 
@@ -728,10 +767,8 @@ static TRDP_ERR_T subscribeTelegram(UINT32 ifcIdx, TRDP_EXCHG_PAR_T * pExchgPar)
     TRDP_ERR_T result;
 
     /*  Find dataset for the telegram   */
-    for (i = 0; i < numDataset; i++)
-        if (apDataset[i]->id == pExchgPar->datasetId)
-            pDatasetDesc = apDataset[i];
-    if (!pDatasetDesc)
+    result = findDataset(pExchgPar->datasetId, &pDatasetDesc);
+    if (result != TRDP_NO_ERR)
     {
         printf("Unknown datasetId %u for comID %u\n", pExchgPar->datasetId, pExchgPar->comId);
         return TRDP_PARAM_ERR;
@@ -783,7 +820,7 @@ static TRDP_ERR_T subscribeTelegram(UINT32 ifcIdx, TRDP_EXCHG_PAR_T * pExchgPar)
         pSubTlg->pIfConfig = &pIfConfig[ifcIdx];
         pSubTlg->comID = pExchgPar->comId;
         pSubTlg->srcID = pExchgPar->pSrc[i].id;
-        result = fillDataset(pSubTlg->pDatasetDesc, &pSubTlg->dataset);
+        result = fillDataset(pSubTlg->pDatasetDesc, &pSubTlg->dataset, NULL);
         if (result != TRDP_NO_ERR)
         {
             printf("Failed to initialize dataset for comID %u, srcID %u\n", 
@@ -983,13 +1020,13 @@ static void processData()
             for (i = 0; i < numPubTelegrams; i++)
             {
                 /*  Update dataset  */
-                fillDataset(aPubTelegrams[i].pDatasetDesc, &aPubTelegrams[i].dataset);
+                fillDataset(aPubTelegrams[i].pDatasetDesc, &aPubTelegrams[i].dataset, NULL);
                 /*  Print telegram description and dataset */
                 setColorGreen();
                 printf("%s, ComId %u, DstId %u: ", 
                     aPubTelegrams[i].pIfConfig->ifName, aPubTelegrams[i].comID, aPubTelegrams[i].dstID);
                 setColorDefault();
-                printDataset(aPubTelegrams[i].pDatasetDesc, &aPubTelegrams[i].dataset);
+                printDataset(aPubTelegrams[i].pDatasetDesc, &aPubTelegrams[i].dataset, NULL);
                 /*  Write data to TRDP stack    */
                 result = tlp_put(
                     aPubTelegrams[i].sessionhandle, aPubTelegrams[i].pubHandle, 
@@ -1037,7 +1074,7 @@ static void processData()
                 printf("%s, ComId %u, SrcId %u: ", 
                     aSubTelegrams[i].pIfConfig->ifName, aSubTelegrams[i].comID, aSubTelegrams[i].srcID);
                 setColorDefault();
-                printDataset(aSubTelegrams[i].pDatasetDesc, &aSubTelegrams[i].dataset);
+                printDataset(aSubTelegrams[i].pDatasetDesc, &aSubTelegrams[i].dataset, NULL);
                 if (aSubTelegrams[i].result == TRDP_NO_ERR)
                     setColorGreen();
                 else
