@@ -32,11 +32,18 @@
                 <destination id="1" uri="239.0.1.5" />
             </telegram>
 -->
+			<!-- Now, within this example, this can be confusing. For a multicast source, you must provide the multicast address as the destination and the source identifies the address of the sending device. -->
             <telegram name="tlg1004" com-id="1004" data-set-id="1004" com-parameter-id="1">
                 <pd-parameter cycle="50000" marshall="on" timeout ="150000" validity-behavior="zero"/>
-                <!--<destination id="1" uri ="239.0.1.6" />-->
-                <source      id="1" uri1="239.0.1.4" />
+                <destination id="1" uri ="239.0.1.4" />
+                <source      id="1" uri1="192.168.0.4" />
             </telegram>
+<!--
+            <telegram name="tlg1004s" com-id="2004" data-set-id="1004" com-parameter-id="1">
+                <pd-parameter cycle="50000" marshall="on" timeout ="150000" validity-behavior="zero"/>
+                <destination id="1" uri ="239.0.1.6" />
+            </telegram>
+-->
         </bus-interface>
     </bus-interface-list>
 

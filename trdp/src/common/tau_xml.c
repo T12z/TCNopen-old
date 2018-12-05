@@ -742,6 +742,7 @@ static TRDP_ERR_T readXmlDatasetMap (
                     {
                         if (vos_strnicmp(attribute, "com-id", MAX_TOK_LEN) == 0)
                         {
+                        	printf("%d/%d\n",idx,count);
                             (*ppComIdDsIdMap)[idx].comId = valueInt;
                         }
                         else if (vos_strnicmp(attribute, "data-set-id", MAX_TOK_LEN) == 0)
@@ -792,7 +793,7 @@ static TRDP_ERR_T readXmlDatasets (
             /* Allocate an array of pointers */
             *papDataset = (apTRDP_DATASET_T) vos_memAlloc(count * sizeof(apTRDP_DATASET_T));
 
-            if (papDataset == NULL)
+            if (*papDataset == NULL)
             {
                 vos_printLog(VOS_LOG_ERROR, "%lu Bytes failed to allocate while reading XML telegram definitions!\n",
                              (unsigned long) (count * sizeof(apTRDP_DATASET_T)));

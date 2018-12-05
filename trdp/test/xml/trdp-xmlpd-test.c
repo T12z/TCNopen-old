@@ -306,17 +306,17 @@ static void freeParameters()
     /*  Free allocated memory   */
     if (pComPar)
     {
-        free(pComPar);
+//    	vos_memFree(pComPar);
         pComPar = NULL; numComPar = 0;
     }
     if (pIfConfig)
     {
-        free(pIfConfig);
+//    	vos_memFree(pIfConfig);
         pIfConfig = NULL; numIfConfig = 0;
     }
     if (pComIdDsIdMap)
     {
-        free(pComIdDsIdMap);
+    	vos_memFree(pComIdDsIdMap);
         pComIdDsIdMap = NULL; numComId = 0;
     }
     if (apDataset)
@@ -327,10 +327,10 @@ static void freeParameters()
         for (i=0; i < numDataset; i++)
         {
             pDataset = apDataset[i];
-            free(pDataset);
+            vos_memFree(pDataset);
         }
         /*  Free array of pointers to dataset structures    */
-        free(apDataset);
+        vos_memFree(apDataset);
         apDataset = NULL; numDataset = 0;
     }
 }
@@ -996,7 +996,7 @@ static void processData()
     /*  Initiate next data period   */
     vos_getTime(&nextData);
 
-    while(TRUE)
+    do
     {
         /*  Get current time    */
         vos_getTime(&now);
@@ -1092,15 +1092,19 @@ static void processData()
             vos_subTime(&delay, &now);
             vos_threadDelay((UINT32) (delay.tv_sec * 1000000u + delay.tv_usec));
         }
-    }
+    } while(0);
 }
 
 /*********************************************************************************************************************/
 /** Parse XML configuration file, configure TRDP PD, send and receive configured telegrams
  */
+
+#include <stdio.h>
+#include <unistd.h>
+
 int main(int argc, char * argv[])
 {
-    const char *            pFileName;
+          char              pFileName[80];
     TRDP_ERR_T              result;
     TRDP_XML_DOC_HANDLE_T   docHnd;
     UINT32                  i;
@@ -1112,17 +1116,30 @@ int main(int argc, char * argv[])
         printf("usage: %s <xmlfilename>\n", argv[0]);
         return 1;
     }
-    pFileName = argv[1];
+
+    int rm = 0;
+    if (argv[1][0] == '-' && !argv[1][1]) {
+    	printf("Reading XML from stdin.\n");
+    	snprintf(pFileName, sizeof(pFileName), "/run/user/1000/pdsend.%d.xml", getppid());
+    	FILE *tmpf = fopen(pFileName, "w");
+    	char data[4096];
+    	do ; while (fwrite(data, 1, fread(data, 1, sizeof(data), stdin), tmpf) == sizeof(data));
+    	fclose(tmpf);
+    	rm =1;
+    } else
+    	strncpy(pFileName, argv[1], sizeof(pFileName));
 
     vos_memInit(NULL, 20000, NULL);
 
     /*  Prepare XML document    */
     result = tau_prepareXmlDoc(pFileName, &docHnd);
+    if (rm) unlink(pFileName);
     if (result != TRDP_NO_ERR)
     {
         printf("Failed to prepare XML document: %s\n", getResultString(result));
         return 1;
     }
+
 
     /*  Read general parameters from XML configuration*/
     result = tau_readXmlDeviceConfig(
@@ -1163,8 +1180,8 @@ int main(int argc, char * argv[])
         return 1;
 
     /*  Wait for user to press enter    */
-    printf("Press Enter to start data processing...\n");
-    getchar();
+//    printf("Press Enter to start data processing...\n");
+//    getchar();
 
     /*  Send and receive data   */
     processData();
@@ -1172,7 +1189,8 @@ int main(int argc, char * argv[])
     /*  Free allocated memory   */
     freeParameters();
     /*  Free parsed xml document    */
-    tau_freeXmlDoc(&docHnd);
+    /* no, do not. this was allocated before tlc_init, so it is lost memory */
+//    tau_freeXmlDoc(&docHnd);
     /*  Unpublish all telegrams */
     for (i = 0; i < numPubTelegrams; i++)
         tlp_unpublish(aPubTelegrams[i].sessionhandle, aPubTelegrams[i].pubHandle);
