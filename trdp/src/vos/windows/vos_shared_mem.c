@@ -25,9 +25,9 @@
 * INCLUDES
 */
 
-#ifndef WIN32
+#if (!defined (WIN32) && !defined (WIN64))
 #error \
-    "You are trying to compile the WIN32 implementation of vos_shared_mem.c - either define WIN32 or exclude this file!"
+    "You are trying to compile the Windows implementation of vos_shared_mem.c - either define WIN32 or WIN64 or exclude this file!"
 #endif
 
 #include <stdio.h>
@@ -109,7 +109,7 @@ EXT_DECL VOS_ERR_T vos_sharedOpen (
         else
         {
             /* CHAR8 to TCHAR (Unicode) */
-            err = mbstowcs_s(&convertedChars, shMemName, strlen(pKey) + 1, pKey, _TRUNCATE);
+            err = mbstowcs_s(&convertedChars, (wchar_t *) shMemName, strlen(pKey) + 1, pKey, _TRUNCATE);
             if (err != 0)
             {
                 vos_printLogStr(VOS_LOG_ERROR,"vos_sharedOpen() ERROR Could not convert CHAR8 to TCHAR\n");

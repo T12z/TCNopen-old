@@ -26,7 +26,7 @@
 #include <stdarg.h>
 #include <stdlib.h>
 
-#if defined (_WIN32)
+#if (defined (WIN32) || defined (WIN64))
 #pragma warning (disable: 4200)
 #endif
 
@@ -40,6 +40,13 @@
 #include <sys/ioctl.h>
 #include <time.h>
 #endif
+
+#define UDP
+#define TCPN
+#define TCPRR
+#define TCPRRC
+#define MCAST
+#define MCASTN
 
 /* --- globals ----------------------------------------------------------------- */
 
@@ -310,7 +317,7 @@ void print_log (void *pRefCon, VOS_LOG_T category, const CHAR8 *pTime,
     {
         /* return; */
     }
-#ifdef _WIN32
+#if (defined (WIN32) || defined (WIN64))
     if (pLogFile == NULL)
     {
         char        buf[1024];
@@ -338,7 +345,7 @@ void print_log (void *pRefCon, VOS_LOG_T category, const CHAR8 *pTime,
 
 /* --- platform helper functions ----------------------------------------------- */
 
-#if defined (WIN32)
+#if (defined (WIN32) || defined (WIN64))
 
 void _set_color_red ()
 {
@@ -369,7 +376,7 @@ void _sleep_msec (int msec)
     Sleep(msec);
 }
 
-#ifndef WIN32
+#if (!defined (WIN32) && !defined (WIN64))
 int snprintf (char *str, size_t size, const char *format, ...)
 {
     va_list args;
@@ -610,6 +617,7 @@ void md_callback (void *ref, TRDP_APP_SESSION_T apph,
     {
         print(-4, "unexpected callback ! - %s",
               get_result_string(msg != NULL ? msg->resultCode : 0));
+        sts.err[sts.test]++; 
         return;
     }
 
@@ -624,6 +632,7 @@ void md_callback (void *ref, TRDP_APP_SESSION_T apph,
        case TRDP_REPLYTO_ERR:
        case TRDP_TIMEOUT_ERR:
            /* reply doesn't arrived */
+           sts.err[sts.test]++;
            print(-4, "error %s", get_result_string(msg->resultCode));
            switch (sts.test)
            {
@@ -644,6 +653,7 @@ void md_callback (void *ref, TRDP_APP_SESSION_T apph,
 
        default:
            print(-4, "error %s", get_result_string(msg->resultCode));
+           sts.err[sts.test]++;
            break;
     }
 }
@@ -824,6 +834,7 @@ void exec_next_test ()
     {
        case TST_NOTIFY_TCP:
            /* notification - TCP */
+#ifdef TCPN
            if ((opts.groups & TST_TCP) && (opts.groups & TST_NOTIFY))
            {
                print(-1, "TEST %d -- notification - TCP", sts.test);
@@ -834,10 +845,12 @@ void exec_next_test ()
                flags = (TRDP_FLAGS_T) (flags | TRDP_FLAGS_TCP);
                break;
            }
+#endif
            ++sts.test;
        /* fall through */
        case TST_NOTIFY_UCAST:
            /* notification - unicast */
+#ifdef UDP
            if ((opts.groups & TST_UCAST) && (opts.groups & TST_NOTIFY))
            {
                print(-1, "TEST %d -- notification - UDP - unicast", sts.test);
@@ -847,10 +860,12 @@ void exec_next_test ()
                msg.numExpReplies    = 0;
                break;
            }
+#endif
            ++sts.test;
        /* fall through */
        case TST_NOTIFY_MCAST:
            /* notification - multicast */
+#ifdef MCAST
            if ((opts.groups & TST_MCAST) && (opts.groups & TST_NOTIFY))
            {
                print(-1, "TEST %d -- notification - UDP - multicast", sts.test);
@@ -860,10 +875,12 @@ void exec_next_test ()
                msg.numExpReplies    = 0;
                break;
            }
+#endif
            ++sts.test;
        /* fall through */
        case TST_REQREP_TCP:
            /* request/reply - TCP */
+#ifdef TCPRR
            if ((opts.groups & TST_TCP) && (opts.groups & TST_REQREP))
            {
                print(-1, "TEST %d -- request/reply - TCP", sts.test);
@@ -874,10 +891,12 @@ void exec_next_test ()
                flags = (TRDP_FLAGS_T) (flags | TRDP_FLAGS_TCP);
                break;
            }
+#endif
            ++sts.test;
        /* fall through */
        case TST_REQREP_UCAST:
            /* request/reply - unicast */
+#ifdef UDP
            if ((opts.groups & TST_UCAST) && (opts.groups & TST_REQREP))
            {
                print(-1, "TEST %d -- request/reply - UDP - unicast", sts.test);
@@ -887,10 +906,12 @@ void exec_next_test ()
                msg.numExpReplies    = 1;
                break;
            }
+#endif
            ++sts.test;
        /* fall through */
        case TST_REQREP_MCAST_1:
            /* request/reply - multicast (1 reply) */
+#ifdef MCAST
            if ((opts.groups & TST_MCAST) && (opts.groups & TST_REQREP))
            {
                print(-1, "TEST %d "
@@ -901,10 +922,12 @@ void exec_next_test ()
                msg.numExpReplies    = 1;
                break;
            }
+#endif
            ++sts.test;
        /* fall through */
        case TST_REQREP_MCAST_N:
            /* request/reply - multicast (? replies) */
+#ifdef MCASTN
            if ((opts.groups & TST_MCAST) && (opts.groups & TST_REQREP))
            {
                print(-1, "TEST %d "
@@ -915,10 +938,12 @@ void exec_next_test ()
                msg.numExpReplies    = 0;
                break;
            }
+#endif
            ++sts.test;
        /* fall through */
        case TST_REQREPCFM_TCP:
            /* request/reply/confirm - TCP */
+#ifdef TCPRRC
            if ((opts.groups & TST_TCP) && (opts.groups & TST_REQREPCFM))
            {
                print(-1, "TEST %d -- request/reply/confirm - TCP", sts.test);
@@ -929,10 +954,12 @@ void exec_next_test ()
                flags = (TRDP_FLAGS_T) (flags | TRDP_FLAGS_TCP);
                break;
            }
+#endif
            ++sts.test;
        /* fall through */
        case TST_REQREPCFM_UCAST:
            /* request/reply/confirm - unicast */
+#ifdef UDP
            if ((opts.groups & TST_UCAST) && (opts.groups & TST_REQREPCFM))
            {
                print(-1, "TEST %d -- request/reply/confirm - UDP - unicast", sts.test);
@@ -942,10 +969,12 @@ void exec_next_test ()
                msg.numExpReplies    = 1;
                break;
            }
+#endif
            ++sts.test;
        /* fall through */
        case TST_REQREPCFM_MCAST_1:
            /* request/reply/confirm - multicast (1 reply) */
+#ifdef MCAST
            if ((opts.groups & TST_MCAST) && (opts.groups & TST_REQREPCFM))
            {
                print(-1, "TEST %d "
@@ -956,10 +985,12 @@ void exec_next_test ()
                msg.numExpReplies    = 1;
                break;
            }
+#endif
            ++sts.test;
        /* fall through */
        case TST_REQREPCFM_MCAST_N:
            /* request/reply/confirm - multicast (? reps.) */
+#ifdef MCASTN
            if ((opts.groups & TST_MCAST) && (opts.groups & TST_REQREPCFM))
            {
                print(-1, "TEST %d "
@@ -970,8 +1001,10 @@ void exec_next_test ()
                msg.numExpReplies    = 0;
                break;
            }
+#endif
        /* fall through */
        default:
+ //          vos_threadDelay(6000000);
            exec_next_test();
            return;
     }
@@ -1018,6 +1051,7 @@ void setup_listeners ()
         {
             /* failure */
             print(-4, "tlm_addListener call error %s", get_result_string(err));
+            sts.err[sts.test]++;
         }
     }
     if (opts.groups & TST_UCAST) /* UDP unicast listener */
@@ -1043,6 +1077,7 @@ void setup_listeners ()
         {
             /* failure */
             print(-4, "tlm_addListener call error %s", get_result_string(err));
+            sts.err[sts.test]++;
         }
     }
     if (opts.groups & TST_MCAST) /* UDP multicast listener */
@@ -1068,6 +1103,7 @@ void setup_listeners ()
         {
             /* failure */
             print(-4, "tlm_addListener call error %s", get_result_string(err));
+            sts.err[sts.test]++;
         }
     }
 }
@@ -1157,6 +1193,7 @@ void send_msg (TRDP_MD_INFO_T *msg, TRDP_FLAGS_T flags)
            {
                /* failure */
                print(-4, "tlm_notify call error %s", get_result_string(err));
+               sts.err[sts.test]++;
            }
            break;
 
@@ -1189,6 +1226,7 @@ void send_msg (TRDP_MD_INFO_T *msg, TRDP_FLAGS_T flags)
            {
                /* failure */
                print(-4, "tlm_request call error %s", get_result_string(err));
+               sts.err[sts.test]++;
            }
            break;
 
@@ -1211,6 +1249,7 @@ void send_msg (TRDP_MD_INFO_T *msg, TRDP_FLAGS_T flags)
            {
                /* failure */
                print(-4, "tlm_reply call error %s", get_result_string(err));
+               sts.err[sts.test]++;
            }
            break;
 
@@ -1235,6 +1274,7 @@ void send_msg (TRDP_MD_INFO_T *msg, TRDP_FLAGS_T flags)
            {
                /* failure */
                print(-4, "tlm_replyQuery call error %s", get_result_string(err));
+               sts.err[sts.test]++;
            }
            break;
 
@@ -1251,6 +1291,7 @@ void send_msg (TRDP_MD_INFO_T *msg, TRDP_FLAGS_T flags)
            {
                /* failure */
                print(-4, "tlm_confirm call error %s", get_result_string(err));
+               sts.err[sts.test]++;
            }
            break;
 

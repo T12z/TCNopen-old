@@ -16,6 +16,7 @@
  *
  * $Id$
  *
+ *      BL 2018-10-09: Ticket #213 ComId 31 subscription removed (<-- undone!)
  *      BL 2018-06-29: Default settings handling / compiler warnings
  *      SW 2018-06-26: Ticket #205 tlm_addListener() does not acknowledge TRDP_FLAGS_DEFAULT flag
  *      BL 2018-06-25: Ticket #201 tlp_setRedundant return value if redId is 0
@@ -521,8 +522,8 @@ EXT_DECL TRDP_ERR_T tlc_configSession (
         if ((pPdDefault->flags != TRDP_FLAGS_DEFAULT) &&
             (!(pPdDefault->flags & TRDP_FLAGS_NONE)))
         {
-            pSession->pdDefault.flags |= pPdDefault->flags;
-            pSession->pdDefault.flags &= ~TRDP_FLAGS_NONE;     /* clear TRDP_FLAGS_NONE */
+            pSession->pdDefault.flags   |= pPdDefault->flags;
+            pSession->pdDefault.flags   &= ~TRDP_FLAGS_NONE;   /* clear TRDP_FLAGS_NONE */
         }
 
         if ((pSession->pdDefault.port == TRDP_PD_UDP_PORT) &&
@@ -601,8 +602,8 @@ EXT_DECL TRDP_ERR_T tlc_configSession (
         if ((pMdDefault->flags != TRDP_FLAGS_DEFAULT) &&
             (!(pMdDefault->flags & TRDP_FLAGS_NONE)))
         {
-            pSession->mdDefault.flags |= pMdDefault->flags;
-            pSession->mdDefault.flags &= ~TRDP_FLAGS_NONE;     /* clear TRDP_FLAGS_NONE */
+            pSession->mdDefault.flags   |= pMdDefault->flags;
+            pSession->mdDefault.flags   &= ~TRDP_FLAGS_NONE;   /* clear TRDP_FLAGS_NONE */
         }
 
         /* check whether default values needed or not */
@@ -1394,11 +1395,11 @@ EXT_DECL TRDP_ERR_T tlp_publish (
             if ((pktFlags == TRDP_FLAGS_DEFAULT) &&
                 (pfCbFunction == NULL))
             {
-                pNewElement->pfCbFunction   = appHandle->pdDefault.pfCbFunction;
+                pNewElement->pfCbFunction = appHandle->pdDefault.pfCbFunction;
             }
             else
             {
-                pNewElement->pfCbFunction   = pfCbFunction;
+                pNewElement->pfCbFunction = pfCbFunction;
             }
 
             /*  Find a possible redundant entry in one of the other sessions and sync the sequence counter!
@@ -1680,7 +1681,11 @@ EXT_DECL TRDP_ERR_T tlc_getInterval (
         {
             ret = (TRDP_ERR_T) vos_mutexLock(appHandle->mutex);
 
-            if (ret == TRDP_NO_ERR)
+            if (ret != TRDP_NO_ERR)
+            {
+               vos_printLogStr(VOS_LOG_INFO, "vos_mutexLock() failed\n");
+            }
+            else
             {
                 /*    Get the current time    */
                 vos_getTime(&now);
@@ -2338,7 +2343,7 @@ EXT_DECL TRDP_ERR_T tlp_resubscribe (
 
     /*  Change the addressing item   */
     subHandle->addr.srcIpAddr   = srcIpAddr1;
-    subHandle->addr.srcIpAddr2   = srcIpAddr2;
+    subHandle->addr.srcIpAddr2  = srcIpAddr2;
     subHandle->addr.destIpAddr  = destIpAddr;
 
     subHandle->addr.etbTopoCnt      = etbTopoCnt;
@@ -3142,13 +3147,17 @@ TRDP_ERR_T tlm_replyQuery (
     {
         return TRDP_PARAM_ERR;
     }
-    if ( confirmTimeout != 0U )
+    if ( confirmTimeout == 0U )
     {
-        mdTimeOut = confirmTimeout;
+        mdTimeOut = appHandle->mdDefault.confirmTimeout;
+    }
+    else if ( confirmTimeout == TRDP_INFINITE_TIMEOUT)
+    {
+        mdTimeOut = 0;
     }
     else
     {
-        mdTimeOut = appHandle->mdDefault.confirmTimeout;
+        mdTimeOut = confirmTimeout;
     }
 
     return trdp_mdReply(TRDP_MSG_MQ,
