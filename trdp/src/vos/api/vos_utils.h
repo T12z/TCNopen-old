@@ -12,10 +12,11 @@
  *
  * @remarks This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
  *          If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
- *          Copyright Bombardier Transportation Inc. or its subsidiaries and others, 2013. All rights reserved.
+ *          Copyright Bombardier Transportation Inc. or its subsidiaries and others, 2018. All rights reserved.
  *
  * $Id$
  *
+ *     AHW 2018-11-28: Doxygen comment errors
  *      BL 2017-05-08: Compiler warnings, doxygen comment errors
  *      BL 2017-02-08: Ticket #142: Compiler warnings / MISRA-C 2012 issues
  *      BL 2016-03-10: Ticket #114 SC-32
@@ -51,14 +52,14 @@ extern void *gRefCon;
 #define VOS_MAX_ERR_STR_SIZE    (VOS_MAX_PRNT_STR_SIZE - VOS_MAX_FRMT_SIZE) /**< Max. size of the error part */
 
 /** This is a helper define for separating a path in debug output */
-#ifdef WIN32
+#if (defined (WIN32) || defined (WIN64))
 #define VOS_DIR_SEP     '\\'
 #else
 #define VOS_DIR_SEP     '/'
 #endif
 
 /** Safe printf function */
-#ifdef WIN32
+#if (defined (WIN32) || defined (WIN64))
     #define vos_snprintf(str, size, format, ...) \
     _snprintf_s(str, size, _TRUNCATE, format, __VA_ARGS__)
 #elif defined(__clang__)
@@ -79,7 +80,7 @@ extern void *gRefCon;
                                                           (string)); }}
 
 /** Debug output macro with formatting options */
-#ifdef WIN32
+#if (defined (WIN32) || defined (WIN64))
     #define vos_printLog(level, format, ...)                                   \
     {if (gPDebugFunction != NULL)                                              \
      {   char str[VOS_MAX_PRNT_STR_SIZE];                                      \
@@ -107,7 +108,7 @@ extern void *gRefCon;
 
 
 /** Alignment macros  */
-#ifdef WIN32
+#if (defined (WIN32) || defined (WIN64))
     #define ALIGNOF(type)  __alignof(type)
 /* __alignof__() is broken in GCC since 3.3! It returns 8 for the alignement of long long instaed of 4!
 #elif defined(__GNUC__)
@@ -123,16 +124,20 @@ extern void *gRefCon;
 
 /** Define endianess if not already done by compiler */
 #if (!defined(L_ENDIAN) && !defined(B_ENDIAN))
-#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
-#define L_ENDIAN
+#if defined(__BIG_ENDIAN__) || defined(__ARMEB__) || defined(__THUMBEB__) || defined(__AARCH64EB__) || defined(__MIPSEB)  || defined(__MIPSEB)  || defined(__MIPSEB__)
+    #define B_ENDIAN
+#elif defined(__LITTLE_ENDIAN__) || defined(__ARMEL__) || defined(__THUMBEL__) || defined(__AARCH64EL__) || defined(_MIPSEL) || defined(__MIPSEL) || defined(__MIPSEL__)
+    #define L_ENDIAN
+#elif __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+    #define L_ENDIAN
 #elif __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
-#define B_ENDIAN
-    #elif defined(O_BE)
-        #define B_ENDIAN
-    #elif defined(O_LE)
-        #define L_ENDIAN
+    #define B_ENDIAN
+#elif defined(O_BE)
+    #define B_ENDIAN
+#elif defined(O_LE)
+    #define L_ENDIAN
 #else
-#error "Endianess undefined!"
+    #error "Endianess undefined!"
 #endif
 #endif
 
@@ -164,6 +169,7 @@ extern void *gRefCon;
 /**********************************************************************************************************************/
 /** Calculate CRC for the given buffer and length.
  *  For TRDP FCS CRC calculation the CRC32 according to IEEE802.3 with start value 0xffffffff is used.
+ *  Note: Returned CRC is inverted
  *
  *  @param[in]          crc             Initial value.
  *  @param[in,out]      pData           Pointer to data.
@@ -178,12 +184,11 @@ EXT_DECL UINT32 vos_crc32 (
 
 /**********************************************************************************************************************/
 /** Compute crc32 according to IEC 61375-2-3 B.7
- *  Note: Returned CRC is inverted
  *
  *  @param[in]          crc             Initial value.
  *  @param[in,out]      pData           Pointer to data.
  *  @param[in]          dataLen         length in bytes of data.
- *  @retval             crc32 according to IEC 61375-2-3
+ *  @retval             crc32 according to IEC61784-3-3
  */
 
 EXT_DECL UINT32 vos_sc32 (

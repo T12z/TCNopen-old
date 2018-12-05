@@ -17,6 +17,7 @@
  *
  * $Id$*
  *
+ *      BL 2018-11-26: Ticket #208: Mapping corrected after complaint (Bit 2 was set for prio 2 & 4)
  *      SB 2018-07-20: Ticket #209: vos_getInterfaces returning incorrect "name" and "linkState" on windows (requires
  *                                  at least windows vista now).
  *      BL 2018-07-13: Ticket #208: VOS socket options: QoS/ToS field priority handling needs update
@@ -26,9 +27,9 @@
  *      BL 2017-05-22: Ticket #122: Addendum for 64Bit compatibility (VOS_TIME_T -> VOS_TIMEVAL_T)
  */
 
-#ifndef WIN32
+#if (!defined (WIN32) && !defined (WIN64))
 #error \
-    "You are trying to compile the WIN32 implementation of vos_sock.c - either define WIN32 or exclude this file!"
+    "You are trying to compile the Windows implementation of vos_sock.c - either define WIN32 or WIN64 or exclude this file!"
 #endif
 
 /***********************************************************************************************************************
@@ -116,15 +117,37 @@ INT32 recvmsg (SOCKET sock, struct msghdr *pMessage, int flags)
     int     res         = WSAIoctl(sock, SIO_GET_EXTENSION_FUNCTION_POINTER,
                                    &WSARecvMsg_GUID, sizeof(WSARecvMsg_GUID), &WSARecvMsg,
                                    sizeof(WSARecvMsg), &numBytes, NULL, NULL);
-
-    pMessage->dwFlags = flags;
-    res = WSARecvMsg(sock, pMessage, &numBytes, NULL, NULL);
-    if (0 != res)
+    if (res)
     {
-        DWORD err = WSAGetLastError();
-        if (err != WSAEMSGSIZE)
+        int err = WSAGetLastError();
+
+        err = err;
+        /* to avoid flooding with error messages */
+        if (err != WSAEWOULDBLOCK)
         {
+            vos_printLog(VOS_LOG_ERROR, "WSAIoctl() failed (Err: %d)\n", err);
             return -1;
+        }
+        
+    }
+    else
+    {
+        pMessage->dwFlags = flags;
+        res = WSARecvMsg(sock, pMessage, &numBytes, NULL, NULL);
+        if (0 != res)
+        {
+            DWORD err = WSAGetLastError();
+            
+            /* to avoid flooding with error messages */
+            if (err != WSAEMSGSIZE)
+            {
+                if (err != WSAEWOULDBLOCK)
+                {
+                    vos_printLog(VOS_LOG_ERROR, "WSARecvMsg() failed (Err: %d)\n", err);
+                }
+                return -1;
+            }
+            
         }
     }
     return numBytes;
@@ -514,6 +537,7 @@ EXT_DECL VOS_ERR_T vos_sockInit (void)
 EXT_DECL void vos_sockTerm (void)
 {
     vosSockInitialised = FALSE;
+    (void) WSACleanup();
 }
 
 
@@ -652,6 +676,18 @@ EXT_DECL VOS_ERR_T vos_sockOpenUDP (
         return VOS_SOCK_ERR;
     }
 
+    /*  Include struct in_pktinfo in the message "ancilliary" control data.
+    This way we can get the destination IP address for received UDP packets */
+    {
+        DWORD optValue = TRUE;
+        if (setsockopt(sock, IPPROTO_IP, IP_PKTINFO, (const char *)&optValue, sizeof(optValue)) == -1)
+        {
+            int err = WSAGetLastError();
+            err = err;     /* for lint */
+            vos_printLog(VOS_LOG_ERROR, "setsockopt() IP_PKTINFO failed (Err: %d)\n", err);
+        }
+    }
+
     if ((vos_sockSetOptions(sock, pOptions))
         || (vos_sockSetBuffer(sock) != VOS_NO_ERR))
     {
@@ -730,6 +766,7 @@ EXT_DECL VOS_ERR_T vos_sockClose (
     {
         int err = WSAGetLastError();
 
+        err = err;
         vos_printLog(VOS_LOG_ERROR, "closesocket() failed (Err: %d)\n", err);
         return VOS_PARAM_ERR;
     }
@@ -755,13 +792,14 @@ EXT_DECL VOS_ERR_T vos_sockSetOptions (
     {
         if (1 == pOptions->reuseAddrPort)
         {
-            BOOL8 optValue = TRUE;
+            DWORD optValue = TRUE;
 #ifdef SO_REUSEPORT
             if (setsockopt(sock, SOL_SOCKET, SO_REUSEPORT, &sockOptValue,
                            sizeof(sockOptValue)) == SOCKET_ERROR )
             {
                 int err = WSAGetLastError();
 
+                err = err;
                 vos_printLog(VOS_LOG_ERROR, "setsockopt() SO_REUSEPORT failed (Err: %d)\n", err);
             }
 #else
@@ -776,9 +814,8 @@ EXT_DECL VOS_ERR_T vos_sockSetOptions (
 #endif
         }
 
-        if (pOptions->nonBlocking == TRUE)
         {
-            u_long optValue = TRUE;
+            u_long optValue = (pOptions->nonBlocking == TRUE)?TRUE:FALSE;
 
             if (ioctlsocket(sock, (long) FIONBIO, &optValue) == SOCKET_ERROR)
             {
@@ -802,7 +839,7 @@ EXT_DECL VOS_ERR_T vos_sockSetOptions (
             /* old:
              sockOptValue = (int) ((pOptions->qos << 5) | 4);
              New: */
-            const int   dscpMap[]       = { 0, 8, 18, 24, 34, 40, 48, 56 };
+            const int   dscpMap[]       = { 0, 8, 16, 24, 32, 40, 48, 56 };
             DWORD       sockOptValue    = (DWORD)dscpMap[pOptions->qos];
             if (setsockopt(sock, IPPROTO_IP, IP_TOS, (const char *)&sockOptValue,
                            sizeof(sockOptValue)) == SOCKET_ERROR)
@@ -876,18 +913,6 @@ EXT_DECL VOS_ERR_T vos_sockSetOptions (
         }
 
     }
-    /*   This seems to be unsupported on XP (but IP_RECVDSTADDR is defined!)   */
-    /*  Include struct in_pktinfo in the message "ancilliary" control data.
-        This way we can get the destination IP address for received UDP packets */
-    {
-        DWORD optValue = TRUE;
-        if (setsockopt(sock, IPPROTO_IP, IP_PKTINFO, (const char *)&optValue, sizeof(optValue)) == -1)
-        {
-            int err = WSAGetLastError();
-            err = err;     /* for lint */
-            vos_printLog(VOS_LOG_ERROR, "setsockopt() IP_RECVDSTADDR failed (Err: %d)\n", err);
-        }
-    }
 
     return VOS_NO_ERR;
 }
@@ -958,6 +983,7 @@ EXT_DECL VOS_ERR_T vos_sockJoinMC (
             {
                 int err = WSAGetLastError();
 
+                err = err;
                 vos_printLog(VOS_LOG_ERROR, "setsockopt() IP_MULTICAST_LOOP failed (Err: %d)\n", result);
                 result = VOS_SOCK_ERR;
             }
@@ -1452,7 +1478,12 @@ EXT_DECL VOS_ERR_T vos_sockConnect (
         {
             return VOS_BLOCK_ERR;
         }
-        else if (err != WSAEISCONN)
+        else if (err == WSAEISCONN)
+        {
+ //           return VOS_INUSE_ERR;
+        }
+        else
+
         {
             vos_printLog(VOS_LOG_WARNING, "connect() failed (Err: %d)\n", err);
             return VOS_IO_ERR;

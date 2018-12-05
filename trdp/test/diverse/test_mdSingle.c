@@ -25,7 +25,7 @@
 #if defined (POSIX)
 #include <unistd.h>
 #include <sys/select.h>
-#elif defined (WIN32)
+#elif (defined (WIN32) || defined (WIN64))
 #include "getopt.h"
 #endif
 #include "trdp_if_light.h"
@@ -72,7 +72,7 @@ typedef struct sSessionData
     UINT32              sDataSize;
 } SESSION_DATA_T;
 
-SESSION_DATA_T  sSessionData = {FALSE, FALSE, FALSE, FALSE, FALSE, TRUE, FALSE, MD_COMID1, NULL, NULL, NULL, TRUE, 0};
+SESSION_DATA_T  sSessionData = {FALSE, FALSE, FALSE, FALSE, FALSE, TRUE, FALSE, FALSE, MD_COMID1, NULL, NULL, NULL, TRUE, 0u};
 
 UINT32          ownIP = 0u;
 
@@ -99,23 +99,29 @@ UINT8 gBuffer[64 * 1024];
 /***********************************************************************************************************************
  * PROTOTYPES
  */
-void dbgOut (void *,
-             TRDP_LOG_T,
-             const  CHAR8 *,
-             const  CHAR8 *,
-             UINT16,
-             const  CHAR8 *);
-void    usage (const char *);
-void    myPDcallBack (void *,
-                      TRDP_APP_SESSION_T,
-                      const TRDP_PD_INFO_T *,
-                      UINT8 *,
-                      UINT32 );
-void mdCallback (void *,
-                 TRDP_APP_SESSION_T,
-                 const TRDP_MD_INFO_T *,
-                 UINT8 *,
-                 UINT32 );
+void dbgOut (void *, TRDP_LOG_T, const  CHAR8 *, const  CHAR8 *, UINT16, const  CHAR8 *);
+void usage (const char *);
+void myPDcallBack (void *, TRDP_APP_SESSION_T, const TRDP_PD_INFO_T *, UINT8 *, UINT32 );
+void mdCallback (void *, TRDP_APP_SESSION_T, const TRDP_MD_INFO_T *, UINT8 *, UINT32 );
+void printSelParams(int noDesc, VOS_FDS_T *pReadableFD, VOS_TIMEVAL_T   *pTimeOut);
+
+/**********************************************************************************************************************/
+/* Print wait message */
+void printSelParams(int noDesc, VOS_FDS_T *pReadableFD, VOS_TIMEVAL_T   *pTimeOut)
+{
+    int i;
+    char myStr[256] = "";
+    char *pStr = myStr;
+    for (i = 0; i < noDesc; i++)
+    {
+        if (FD_ISSET(i, pReadableFD))
+        {
+            sprintf(pStr, "%d ", i);
+            pStr += strlen(pStr);
+        }
+    }
+    vos_printLog(VOS_LOG_USR, "Waiting for sockets %s and/or timeout %ld.%d\n", myStr, pTimeOut->tv_sec, pTimeOut->tv_usec * 1000);
+}
 
 /**********************************************************************************************************************/
 /* Print a sensible usage message */
@@ -499,14 +505,23 @@ int main (int argc, char *argv[])
     /*  Output available interfaces (in debug output)  */
     {
         UINT32 availableIfaces = MAX_IF;
+        int i;
+
         if (vos_getInterfaces(&availableIfaces, interfaces) == VOS_NO_ERR)
         {
             vos_printLog(VOS_LOG_USR, "%u IP interfaces found\n", availableIfaces);
         }
+        for (i = 0; i < availableIfaces; i++)
+        {
+            if (interfaces[i].ipAddr == ownIP)
+            {
+                /*    Open a session  */
+                vos_printLog(VOS_LOG_USR, "opening session on %s\n", interfaces[i].name);
+                break;
+            }
+        }
     }
 
-    /*    Open a session  */
-    vos_printLogStr(VOS_LOG_USR, "opening session...\n");
     if (tlc_openSession(&sSessionData.appHandle,
                         ownIP,
                         0,                         /* use default IP address    */
@@ -590,7 +605,7 @@ int main (int argc, char *argv[])
                 what ever comes first.
             */
             rv = vos_select((int)noDesc + 1, &rfds, NULL, NULL, &tv);
-            /* vos_printLog(VOS_LOG_USR, "descriptors ready: 0x%04x\n", rfds.fds_bits[0]); */
+            /* vos_printLog(VOS_LOG_USR, "%d descriptors ready: 0x%04x\n", rv, rfds.fds_bits[0]); */
             (void) tlc_process(sSessionData.appHandle, (TRDP_FDS_T *) &rfds, &rv);
         }
         else
