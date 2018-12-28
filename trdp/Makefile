@@ -150,7 +150,7 @@ xml:		outdir $(OUTDIR)/trdp-xmlprint-test $(OUTDIR)/trdp-xmlpd-test
 $(OUTDIR)/%.o: %.c %.h trdp_if_light.h trdp_types.h vos_types.h
 	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
 
-$(OUTDIR)/libtrdp.a:		$(addprefix $(OUTDIR)/,$(notdir $(TRDP_OBJS)))
+$(OUTDIR)/libtrdp.a:		$(addprefix $(OUTDIR)/,$(notdir $(TRDP_OBJS))) $(addprefix $(OUTDIR)/,$(notdir $(TRDP_OPT_OBJS)))
 			@echo ' ### Building the lib $(@F)'
 			$(RM) $@
 			$(AR) cq $@ $^
@@ -237,19 +237,19 @@ $(OUTDIR)/mdManager: mdManager.c  $(OUTDIR)/libtrdp.a
 # rule for the various test binaries
 #
 ###############################################################################
-$(OUTDIR)/trdp-xmlprint-test:  trdp-xmlprint-test.c  $(OUTDIR)/libtrdp.a $(addprefix $(OUTDIR)/,$(notdir $(TRDP_OPT_OBJS)))
+$(OUTDIR)/trdp-xmlprint-test:  trdp-xmlprint-test.c  $(OUTDIR)/libtrdp.a 
 			@$(ECHO) ' ### Building application $(@F)'
 			$(CC) $^ \
 			$(CFLAGS) $(INCLUDES) -o $@ \
-			-ltrdp -lz \
+			-ltrdp \
 			$(LDFLAGS)
 			$(STRIP) $@
 
-$(OUTDIR)/trdp-xmlpd-test:  trdp-xmlpd-test.c  $(OUTDIR)/libtrdp.a $(OUTDIR)/libtrdp.a $(addprefix $(OUTDIR)/,$(notdir $(TRDP_OPT_OBJS)))
+$(OUTDIR)/trdp-xmlpd-test:  trdp-xmlpd-test.c  $(OUTDIR)/libtrdp.a 
 			@$(ECHO) ' ### Building application $(@F)'
 			$(CC) $^  \
 			$(CFLAGS) $(INCLUDES) -o $@\
-			-ltrdp -lz \
+			-ltrdp \
 			$(LDFLAGS)
 			$(STRIP) $@
 

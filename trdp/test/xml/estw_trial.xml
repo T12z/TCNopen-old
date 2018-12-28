@@ -1,0 +1,155 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<device xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="trdp-config.xsd" host-name="examplehost" leader-name="leaderhost" type="dummy">
+    <device-configuration memory-size="65535">
+        <mem-block-list>
+            <mem-block size="32" preallocate="512" />
+            <mem-block size="72" preallocate="256"/>
+            <mem-block size="128" preallocate="256"/>
+        </mem-block-list>
+    </device-configuration>
+    
+    <bus-interface-list>
+        <bus-interface network-id="1" name="eth" host-ip="0.0.0.0" <!-- host-ip="192.168.111.106" --> >
+            <trdp-process blocking="no" cycle-time="100000" priority="80" traffic-shaping="on" />
+            <pd-com-parameter marshall="off" qos="5" ttl="1" timeout-value="200000" validity-behavior="zero" />
+            <!-- Now, within this example, this can be confusing. For a multicast source, you must provide the multicast address as the destination and the source identifies the address of the sending device. -->
+            
+<!--        <telegram name="tlg1001" com-id="1001" data-set-id="1001" com-parameter-id="1">
+                <pd-parameter cycle="100000" marshall="on" timeout ="300000" validity-behavior="keep"/>
+                <destination id="1" uri="239.0.1.1" />
+            </telegram>
+            <telegram name="tlg1002" com-id="1002" data-set-id="1002" com-parameter-id="1">
+                <pd-parameter cycle="50000" marshall="on" timeout ="150000" validity-behavior="zero"/>
+                <destination id="1" uri="239.0.1.2" />
+            </telegram>
+            <telegram name="tlg1003" com-id="1003" data-set-id="1003" com-parameter-id="1">
+                <pd-parameter cycle="50000" marshall="on" timeout ="150000" validity-behavior="zero"/>
+                <destination id="1" uri="239.0.1.3" />
+            </telegram>
+            <telegram name="tlg1005" com-id="1005" data-set-id="1005" com-parameter-id="1">
+                <pd-parameter cycle="50000" marshall="on" timeout ="150000" validity-behavior="zero"/>
+                <destination id="1" uri="239.0.1.5" />
+            </telegram>
+-->
+			<telegram name="TrackPlan" com-id="1111" data-set-id="1111" com-parameter-id="1">
+				<pd-parameter cycle="500000" marshall="on" timeout ="1500000" validity-behavior="zero"/>
+				<destination id="1" <!-- uri ="192.168.111.108"  -->/>
+				<!--source      id="1" uri1="10.0.0.1" /-->
+			</telegram>
+			<telegram name="TrackDMI"  com-id="1112" data-set-id="1112" com-parameter-id="1">
+				<pd-parameter cycle="500000" marshall="on" timeout ="1500000" validity-behavior="zero"/>
+				<!--destination id="1" uri ="10.0.0.1" /-->
+				<source      id="1" <!-- uri1="192.168.111.108"  -->/>
+			</telegram>
+        </bus-interface>
+    </bus-interface-list>
+
+    <mapped-device-list>
+    </mapped-device-list>
+
+    <com-parameter-list>
+        <!--Default PD communication parameters-->
+        <com-parameter id="1" qos="5" ttl="64" />
+        <!--Own PD communication parameters-->
+        <com-parameter id="4" qos="4" ttl="2" />
+    </com-parameter-list>
+
+    <data-set-list>
+		<data-set name="StatusWord" id="1200">
+			<element name="active"  type="BOOL"/>
+			<element name="CW"      type="BOOL"/>
+			<element name="tripped" type="BOOL"/>
+			<element name="stopped" type="BOOL"/>
+		</data-set>
+		<data-set name="PositionRep" id="1201">
+			<element name="TrackID"  type="INT32"/>
+			<element name="distance" type="INT32"/>
+			<element name="location" type="INT32"/>
+		</data-set>
+		<data-set name="TrainData" id="1202">
+			<element name="location" type="INT32"/>
+			<element name="velocity" type="INT16"/>
+			<element name="acc"      type="INT16"/>
+			<element name="time"     type="INT32"/>
+			<element name="packedflags" type="UINT32"/>
+			<element name="flag"     type="1200"/>
+			<element name="BrPc"     type="INT16"/>
+			<element name="vMax"     type="INT16"/>
+			<element name="vRelease" type="INT16"/>
+			<element name="vOnSight" type="INT16"/>
+			<element name="length"   type="INT32"/>
+			<element name="Ant2CabA" type="INT32"/>
+		</data-set>
+		<data-set name="TrackKnotRelLocs" id="1203">
+			<element name="Rear"           type="INT8"/>
+			<element name="Front"          type="INT8"/>
+			<element name="PI"             type="INT8"/>
+			<element name="Indication"     type="INT8"/>
+			<element name="Permitted"      type="INT8"/>
+			<element name="FLOI"           type="INT8"/>
+			<element name="Target"         type="INT8"/>
+			<element name="ProtectedFront" type="INT8"/>
+		</data-set>
+		<data-set name="TrackKnotLine" id="1204">
+			<element name="to"    type="INT16"/>
+			<element name="rLine" type="UINT8"/>
+			<element name="on"    type="BOOL"/>
+		</data-set>
+		<data-set name="TrackKnot" id="1205">
+			<element name="TrackID"   type="INT32"/>
+			<element name="length"    type="INT32"/>
+			<element name="vStraight" type="INT16"/>
+			<element name="vTurn"     type="INT16"/>
+			<element name="line"      type="1204" array-size="4"/>
+		</data-set>
+
+    	
+        <data-set name="ATrackKnot"    id="1009"><element name="TrackKnot"    type="INT32" array-size= "6"/></data-set>
+        <data-set name="ATrackPlan"    id="1011"><element name="ATrackKnot"   type="1009"  array-size="38"/></data-set><!-- 228 -->
+        <data-set name="ATrackDMI"     id="1012">
+        	<element name="TrainID" type="INT32"/>
+        	<element name="TrackRelLocs" type="INT64" array-size="38"/>
+        </data-set>
+		<data-set name="DMI_ctrl"      id="1021"><element name="DMI_ctrl"     type="INT32"/></data-set>
+        <data-set name="ASDM_DMI_data" id="1022"><element name="SDM_DMI_data" type="INT32" array-size="350"/></data-set>
+        <data-set name="AXTrainReport" id="1031"><element name="XTrainReport" type="INT32" array-size= "13"/></data-set>
+        <data-set name="AIntervention" id="1032"><element name="Intervention" type="INT32" array-size=  "6"/></data-set>
+        
+		<data-set name="TrackPlan"     id="1111">
+			<element name="sizeTracks" type="INT32"/>
+			<element name="TrackKnot"  type="1205" array-size="0"/>
+		</data-set>
+		<data-set name="TrackDMI"      id="1112">
+			<element name="TrainID"      type="INT32"/>
+			<element name="sizeTracks"   type="INT32"/>
+			<element name="TrackRelLocs" type="1203" array-size="0"/>
+		</data-set>
+		<data-set name="TrainReport" id="1131">
+			<element name="TrackID"   type="INT32"/>
+			<element name="distance"  type="INT32"/>
+			<element name="TrainData" type="1202"/>
+		</data-set>
+		<data-set name="Intervention" id="1132">
+			<element name="targetDist" type="INT32"/>
+			<element name="permittedSpeed" type="INT32"/>
+			<element name="interventionSpeed" type="INT32"/>
+			<element name="EB_cmd"  type="INT32"/>
+			<element name="SB_cmd"  type="INT32"/>
+			<element name="TC_cmd"  type="INT32"/>
+		</data-set>
+		<data-set name="AllPositionRep" id="1141">
+			<element name="sizeTrains"  type="INT32"/>
+			<element name="PositionRep" type="1142" array-size="0"/>
+		</data-set>
+		<data-set name="PositionRep"    id="1142">
+			<element name="TrainID"  type="INT32"/>
+			<element name="Velocity" type="INT16"/>
+			<element name="Acc"      type="INT16"/>
+			<element name="FrontLoc" type="1201"/>
+			<element name="RearLoc" type="1201"/>
+			<element name="AntLoc" type="1201"/>
+		</data-set>
+    </data-set-list>
+
+    <debug file-name="trdp.log" file-size="1000000" info="DTFC" level="D" />
+</device>

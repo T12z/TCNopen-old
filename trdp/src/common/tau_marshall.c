@@ -368,22 +368,19 @@ static UINT8 maxSizeOfDSMember (
 {
     UINT16  lIndex;
     UINT8   maxSize = 1;
+    UINT8   elemSize;
 
     if (pDataset != NULL)
     {
         /*    Loop over all datasets in the array    */
         for (lIndex = 0u; lIndex < pDataset->numElement; ++lIndex)
         {
-            if (pDataset->pElement[lIndex].type <= TRDP_TIMEDATE64)
+        	elemSize = (pDataset->pElement[lIndex].type <= TRDP_TIMEDATE64)
+        			? cSizeOfBasicTypes[pDataset->pElement[lIndex].type]
+					: maxSizeOfDSMember(findDs(pDataset->pElement[lIndex].type));
+            if (maxSize < elemSize)
             {
-                if (maxSize < cSizeOfBasicTypes[pDataset->pElement[lIndex].type])
-                {
-                    maxSize = cSizeOfBasicTypes[pDataset->pElement[lIndex].type];
-                }
-            }
-            else    /* recurse if nested dataset */
-            {
-                maxSize = maxSizeOfDSMember(findDs(pDataset->pElement[lIndex].type));
+            	maxSize = elemSize;
             }
         }
     }
