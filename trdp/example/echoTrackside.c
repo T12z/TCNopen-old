@@ -39,13 +39,13 @@
 #define TRACKS                 38
 
 #define PD_COMRX_ID            1111
-#define PD_COMRX_CYCLE         250000
-#define PD_COMRX_TIMEOUT       15000000
+#define PD_COMRX_CYCLE         100000
+#define PD_COMRX_TIMEOUT       1500000
 #define PD_COMRX_DATA_SIZE     (4+(TRACKS*7*4))
 
 #define PD_COMTX_ID            1112
-#define PD_COMTX_CYCLE         250000
-#define PD_COMTX_TIMEOUT       15000000
+#define PD_COMTX_CYCLE         100000
+#define PD_COMTX_TIMEOUT       1500000
 #define PD_COMTX_DATA_SIZE     (4+4+TRACKS*8)
 
 /* We use dynamic memory    */
@@ -114,7 +114,7 @@ void dbgOut (
 
 
 void putTrainToTrack() {
-	gBuffer.TrainId = htonl(1);
+	gBuffer.TrainId = htonl(2);
 	gBuffer.size_tracks = htonl(TRACKS);
 	sections sl2 = {  5, 15, 45, 65, 75, 85, 95, 35};
 	sections sl1 = { 95, 85, 55, 35, 25, 15,  5, 65};
@@ -127,7 +127,37 @@ void putTrainToTrack() {
 	gBuffer.tracks[9 -1] = sl2;
 	gBuffer.tracks[10-1] = sl2;
 	gBuffer.tracks[17-1] = sl2;
+}
+
+void moveTrainOnTrack() {
+	int round[] =   { 17,  19,   5,  29,   1,  26,   9,  28,  13,  38};
+	int lengths[] = {794, 373, 115, 466, 115, 476, 115, 464, 115, 357};
+	int total = 3390, v=5;
+	static int a = 0, b = 150;
 	
+	gBuffer.TrainId = htonl(2);
+	gBuffer.size_tracks = htonl(TRACKS);
+	
+	int e=0;
+	for (int i=0; i<10; i++) {
+		int da = a-e;
+		int db = b-e;
+		
+		da = (da >= 0 && da < lengths[i]) ? (da*100)/lengths[i] : 
+			((da < 0 && db >= lengths[i]) || (db >= 0 && db < lengths[i])) ? 0 : 100;
+
+		db = (db >= 0 && db < lengths[i]) ? (db*100)/lengths[i] : 100;
+
+		sections sb = { da, db, db, db, db, db, db, db };
+		gBuffer.tracks[round[i]-1] = sb;
+		
+		e += lengths[i];
+	}
+	
+	a+=v;
+	b+=v;
+	a%=total;
+	b%=total;
 }
 
 
@@ -344,7 +374,7 @@ int main (int argc, char * *argv)
         fd_set  rfds;
         INT32   noOfDesc;
         struct timeval  tv;
-        struct timeval  max_tv = {0, 100000};
+        struct timeval  max_tv = {0, 50000};
 
         /*
             Prepare the file descriptor set for the select call.
@@ -403,6 +433,8 @@ int main (int argc, char * *argv)
         {
             /* vos_printLogStr(VOS_LOG_USR, "looping...\n"); */
         }
+
+        moveTrainOnTrack();
 
         /* Update the information, that is sent */
 /* not really change anything now */
