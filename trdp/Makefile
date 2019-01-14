@@ -68,7 +68,9 @@ TRDP_OPT_OBJS = trdp_xml.o \
 		tau_marshall.o \
 		tau_dnr.o \
 		tau_tti.o \
-		tau_ctrl.o
+		tau_ctrl.o \
+		tau_xsession.o \
+		tau_xmarshall.o
 
 
 # Set LINT Objects
@@ -96,10 +98,18 @@ TRDP_OBJS += trdp_mdcom.o
 CFLAGS += -DMD_SUPPORT=1
 endif
 
-ifeq ($(DEBUG), TRUE)
-	OUTDIR = bld/output/$(ARCH)-dbg
+ifeq ($(BIT), 64)
+	ARCHB := $(ARCH)_64
+	CFLAGS += -m64
 else
-	OUTDIR = bld/output/$(ARCH)-rel
+	ARCHB := $(ARCH)
+	CFLAGS += -m32
+endif
+
+ifeq ($(DEBUG), TRUE)
+	OUTDIR = bld/output/$(ARCHB)-dbg
+else
+	OUTDIR = bld/output/$(ARCHB)-rel
 endif
 
 # Set LINT result outdir now after OUTDIR is known

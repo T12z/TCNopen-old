@@ -10,7 +10,8 @@
 #// Copyright NewTec GmbH, 2017. All rights reserved.
 #//
 
-ARCH = linux-x86_64
+ARCH = linux-x86
+BIT ?= 64
 TARGET_VOS = posix
 TARGET_OS = LINUX
 TCPREFIX = 
@@ -19,7 +20,7 @@ DOXYPATH =
 
 # the _GNU_SOURCE is needed to get the extended poll feature for the POSIX socket
 
-CFLAGS += -Wall -m64 -fstrength-reduce -fno-builtin -fsigned-char -pthread -fPIC -D_GNU_SOURCE -DPOSIX -DL_ENDIAN
+CFLAGS += -Wall -fstrength-reduce -fno-builtin -fsigned-char -pthread -fPIC -D_GNU_SOURCE -DPOSIX -DL_ENDIAN
 LDFLAGS += -lrt
 
 LINT_SYSINCLUDE_DIRECTIVES = -i ./src/vos/posix -wlib 0 -DL_ENDIAN
