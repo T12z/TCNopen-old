@@ -385,6 +385,9 @@ static TRDP_ERR_T readTelegramDef (
                             pExchgParam->pPdPar->flags  |= TRDP_FLAGS_MARSHALL;
                             pExchgParam->pPdPar->flags  &= (TRDP_FLAGS_T) ~TRDP_FLAGS_NONE;
                         }
+                        else if (vos_strnicmp("off", value, TRDP_MAX_LABEL_LEN) == 0) {
+                        	pExchgParam->pPdPar->flags |= TRDP_FLAGS_NONE;
+                        }
                     }
                     else if (vos_strnicmp(attribute, "callback", MAX_TOK_LEN) == 0)
                     {
@@ -395,6 +398,7 @@ static TRDP_ERR_T readTelegramDef (
                         }
                         else if (vos_strnicmp("always", value, TRDP_MAX_LABEL_LEN) == 0)
                         {
+                            pExchgParam->pPdPar->flags  |= TRDP_FLAGS_CALLBACK;
                             pExchgParam->pPdPar->flags  |= TRDP_FLAGS_FORCE_CB;
                             pExchgParam->pPdPar->flags  &= (TRDP_FLAGS_T) ~TRDP_FLAGS_NONE;
                         }
@@ -742,7 +746,6 @@ static TRDP_ERR_T readXmlDatasetMap (
                     {
                         if (vos_strnicmp(attribute, "com-id", MAX_TOK_LEN) == 0)
                         {
-                        	printf("%d/%d\n",idx,count);
                             (*ppComIdDsIdMap)[idx].comId = valueInt;
                         }
                         else if (vos_strnicmp(attribute, "data-set-id", MAX_TOK_LEN) == 0)
@@ -1481,7 +1484,7 @@ EXT_DECL TRDP_ERR_T tau_readXmlDeviceConfig (
                         }
                         if (strpbrk(value, "Ee") != NULL)
                         {
-                            pDbgConfig->option |= TRDP_DBG_ERR | TRDP_DBG_WARN | TRDP_DBG_ERR;
+                            pDbgConfig->option |= TRDP_DBG_ERR;
                         }
                         if (strpbrk(value, "Ii") != NULL)
                         {
